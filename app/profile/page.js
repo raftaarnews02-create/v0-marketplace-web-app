@@ -1,256 +1,174 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { LogOut, Edit2, User as UserIcon } from 'lucide-react';
+import { Store, Package, ShoppingCart, Heart, MessageCircle, Settings, LogOut, Star, MapPin, Phone, User } from 'lucide-react';
 
 export default function Profile() {
+  const { user, token, logout } = useAuth();
   const router = useRouter();
-  const { user, logout } = useAuth();
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    name: user?.name || '',
-    phone: user?.phone || '',
-    address: user?.address || {},
+  const [activeTab, setActiveTab] = useState('listings');
+  const [stats, setStats] = useState({
+    shops: 0,
+    products: 0,
+    orders: 0,
   });
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/auth/login');
+    }
+  }, [user, router]);
 
   const handleLogout = () => {
     logout();
     router.push('/');
   };
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleAddressChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      address: {
-        ...prev.address,
-        [name]: value,
-      },
-    }));
-  };
-
   if (!user) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
+      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <UserIcon size={48} className="mx-auto text-muted-foreground mb-4" />
-          <p className="text-lg font-medium text-foreground mb-2">Sign in to view your profile</p>
-          <Link
-            href="/auth/login"
-            className="text-primary font-medium hover:underline"
-          >
-            Sign In
-          </Link>
+          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-500">Loading...</p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-gray-50 pb-20">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-card border-b border-border shadow-sm">
-        <div className="max-w-2xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-foreground">My Profile</h1>
+      <header className="sticky top-0 z-40 bg-white shadow-sm">
+        <div className="max-w-md mx-auto px-4 py-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-bold text-gray-800">My Account</h1>
+            <button className="p-2 text-gray-600">
+              <Settings className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        {/* Profile Card */}
-        <div className="bg-card border border-border rounded-lg p-8 mb-6">
-          {/* Avatar */}
-          <div className="flex items-center gap-6 mb-6">
-            <div className="w-20 h-20 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white text-2xl font-bold">
-              {user.name?.charAt(0).toUpperCase()}
+      {/* Profile Card */}
+      <section className="max-w-md mx-auto px-4 py-4">
+        <div className="bg-white rounded-xl p-4 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+              {user.name?.charAt(0)?.toUpperCase() || 'U'}
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-foreground">{user.name}</h2>
-              <p className="text-muted-foreground">{user.email}</p>
-              <p className="text-xs font-medium text-primary mt-2">
-                {user.userType === 'seller' ? 'Seller Account' : 'Buyer Account'}
-              </p>
+            <div className="flex-1">
+              <h2 className="text-lg font-bold text-gray-800">{user.name || 'User'}</h2>
+              <p className="text-sm text-gray-500">{user.phone}</p>
+              <span className="inline-block mt-1 px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded-full capitalize">
+                {user.userType}
+              </span>
             </div>
           </div>
-
-          {!isEditing ? (
-            <div>
-              {/* Profile Info */}
-              <div className="space-y-4 mb-6">
-                {user.phone && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground">Phone</p>
-                    <p className="text-foreground">{user.phone}</p>
-                  </div>
-                )}
-
-                {user.address?.city && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground">Location</p>
-                    <p className="text-foreground">
-                      {user.address.city}
-                      {user.address.state ? `, ${user.address.state}` : ''}
-                    </p>
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Account Type</p>
-                  <p className="text-foreground capitalize">{user.userType}</p>
-                </div>
-
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Member Since</p>
-                  <p className="text-foreground">
-                    {new Date().getFullYear()} (Recently joined)
-                  </p>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity font-medium"
-                >
-                  <Edit2 size={18} />
-                  Edit Profile
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center gap-2 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 transition-opacity font-medium"
-                >
-                  <LogOut size={18} />
-                  Logout
-                </button>
-              </div>
-            </div>
-          ) : (
-            <form className="space-y-4">
-              {/* Name */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                />
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  Phone Number
-                </label>
-                <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  placeholder="+91 9999999999"
-                  className="w-full px-4 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                />
-              </div>
-
-              {/* City */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  City
-                </label>
-                <input
-                  type="text"
-                  name="city"
-                  value={formData.address.city || ''}
-                  onChange={handleAddressChange}
-                  placeholder="Mumbai"
-                  className="w-full px-4 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                />
-              </div>
-
-              {/* State */}
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-2">
-                  State
-                </label>
-                <input
-                  type="text"
-                  name="state"
-                  value={formData.address.state || ''}
-                  onChange={handleAddressChange}
-                  placeholder="Maharashtra"
-                  className="w-full px-4 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background"
-                />
-              </div>
-
-              {/* Buttons */}
-              <div className="flex gap-2 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity font-medium"
-                >
-                  Save Changes
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsEditing(false);
-                    setFormData({
-                      name: user.name || '',
-                      phone: user.phone || '',
-                      address: user.address || {},
-                    });
-                  }}
-                  className="flex-1 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition-opacity font-medium"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
         </div>
+      </section>
 
-        {/* Seller Section */}
-        {user.userType === 'seller' && (
-          <div className="bg-card border border-border rounded-lg p-8">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Seller Dashboard</h3>
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-primary/10 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-primary">0</p>
-                <p className="text-xs text-muted-foreground">Products Listed</p>
-              </div>
-              <div className="bg-primary/10 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-primary">0</p>
-                <p className="text-xs text-muted-foreground">Total Sales</p>
-              </div>
-              <div className="bg-primary/10 rounded-lg p-4 text-center">
-                <p className="text-2xl font-bold text-primary">5.0</p>
-                <p className="text-xs text-muted-foreground">Rating</p>
-              </div>
-            </div>
-            <Link
-              href="/sell"
-              className="block px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity font-medium text-center"
-            >
-              Manage Products
+      {/* Stats */}
+      <section className="max-w-md mx-auto px-4 py-2">
+        <div className="grid grid-cols-3 gap-3">
+          <Link href="/sell" className="bg-white rounded-xl p-3 shadow-sm text-center">
+            <Store className="w-5 h-5 mx-auto text-orange-500 mb-1" />
+            <span className="text-lg font-bold text-gray-800">{stats.shops}</span>
+            <p className="text-xs text-gray-500">Shops</p>
+          </Link>
+          <Link href="/sell" className="bg-white rounded-xl p-3 shadow-sm text-center">
+            <Package className="w-5 h-5 mx-auto text-green-500 mb-1" />
+            <span className="text-lg font-bold text-gray-800">{stats.products}</span>
+            <p className="text-xs text-gray-500">Products</p>
+          </Link>
+          <Link href="/orders" className="bg-white rounded-xl p-3 shadow-sm text-center">
+            <ShoppingCart className="w-5 h-5 mx-auto text-blue-500 mb-1" />
+            <span className="text-lg font-bold text-gray-800">{stats.orders}</span>
+            <p className="text-xs text-gray-500">Orders</p>
+          </Link>
+        </div>
+      </section>
+
+      {/* Quick Actions */}
+      <section className="max-w-md mx-auto px-4 py-4">
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          {user.userType === 'vendor' && (
+            <Link href="/sell" className="flex items-center gap-3 p-4 border-b border-gray-100 hover:bg-gray-50">
+              <Store className="w-5 h-5 text-orange-500" />
+              <span className="text-sm font-medium text-gray-700">My Shop</span>
             </Link>
+          )}
+          <Link href="/cart" className="flex items-center gap-3 p-4 border-b border-gray-100 hover:bg-gray-50">
+            <ShoppingCart className="w-5 h-5 text-blue-500" />
+            <span className="text-sm font-medium text-gray-700">My Cart</span>
+          </Link>
+          <Link href="/wishlist" className="flex items-center gap-3 p-4 border-b border-gray-100 hover:bg-gray-50">
+            <Heart className="w-5 h-5 text-red-500" />
+            <span className="text-sm font-medium text-gray-700">Wishlist</span>
+          </Link>
+          <Link href="/messages" className="flex items-center gap-3 p-4 border-b border-gray-100 hover:bg-gray-50">
+            <MessageCircle className="w-5 h-5 text-green-500" />
+            <span className="text-sm font-medium text-gray-700">Messages</span>
+          </Link>
+        </div>
+      </section>
+
+      {/* Account Settings */}
+      <section className="max-w-md mx-auto px-4 py-4">
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center gap-3 p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer">
+            <User className="w-5 h-5 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Edit Profile</span>
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-3 p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer">
+            <MapPin className="w-5 h-5 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Saved Addresses</span>
+          </div>
+          <div className="flex items-center gap-3 p-4 hover:bg-gray-50 cursor-pointer">
+            <Phone className="w-5 h-5 text-gray-500" />
+            <span className="text-sm font-medium text-gray-700">Change Mobile Number</span>
+          </div>
+        </div>
+      </section>
+
+      {/* Logout */}
+      <section className="max-w-md mx-auto px-4 py-4">
+        <button
+          onClick={handleLogout}
+          className="w-full bg-white rounded-xl p-4 shadow-sm flex items-center gap-3 text-red-600"
+        >
+          <LogOut className="w-5 h-5" />
+          <span className="text-sm font-medium">Logout</span>
+        </button>
+      </section>
+
+      {/* Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-1.5 z-50">
+        <div className="max-w-md mx-auto flex items-center justify-between px-4">
+          <Link href="/" className="flex flex-col items-center gap-0.5 p-1.5 text-gray-500">
+            <Store className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Home</span>
+          </Link>
+          <Link href="/browse" className="flex flex-col items-center gap-0.5 p-1.5 text-gray-500">
+            <Package className="w-5 h-5" />
+            <span className="text-[10px] font-medium">Browse</span>
+          </Link>
+          <Link href="/sell" className="flex flex-col items-center gap-0.5 -mt-6">
+            <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center shadow-lg border-4 border-white">
+              <span className="w-6 h-6 text-white text-lg font-bold">+</span>
+            </div>
+            <span className="text-[10px] font-medium text-gray-600">Sell</span>
+          </Link>
+          <Link href="/profile" className="flex flex-col items-center gap-0.5 p-1.5 text-orange-600">
+            <div className="w-5 h-5 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold text-xs">
+              {user.name?.charAt(0)?.toUpperCase() || 'U'}
+            </div>
+            <span className="text-[10px] font-medium">Account</span>
+          </Link>
+        </div>
+      </nav>
     </main>
   );
 }
