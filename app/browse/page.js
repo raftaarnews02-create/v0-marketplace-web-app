@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useProducts } from '@/hooks/useProducts';
 import ProductCard from '@/components/ProductCard';
@@ -8,7 +8,7 @@ import SearchBar from '@/components/SearchBar';
 import CategorySelector from '@/components/CategorySelector';
 import { Loader } from 'lucide-react';
 
-export default function Browse() {
+function BrowseContent() {
   const searchParams = useSearchParams();
   const { products, loading, fetchProducts } = useProducts();
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -114,5 +114,28 @@ export default function Browse() {
         )}
       </div>
     </main>
+  );
+}
+
+function BrowseLoading() {
+  return (
+    <main className="min-h-screen bg-background">
+      <header className="sticky top-0 z-40 bg-card border-b border-border shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <h1 className="text-2xl font-bold text-foreground mb-4">Browse Services</h1>
+        </div>
+      </header>
+      <div className="flex items-center justify-center py-12">
+        <Loader className="animate-spin text-primary" size={40} />
+      </div>
+    </main>
+  );
+}
+
+export default function Browse() {
+  return (
+    <Suspense fallback={<BrowseLoading />}>
+      <BrowseContent />
+    </Suspense>
   );
 }

@@ -133,7 +133,9 @@ export default function AdminProducts() {
 
   // Check if user is admin
   const isAdmin = user?.userType === 'admin' || user?.role === 'admin';
-  if (!isAdmin && !localStorage.getItem('user')) {
+  const hasStoredUser = typeof window !== 'undefined' && localStorage.getItem('user');
+
+  if (!isAdmin && !hasStoredUser) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <div className="text-center">
