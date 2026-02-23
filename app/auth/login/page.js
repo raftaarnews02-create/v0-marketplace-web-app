@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Store, Phone, Lock } from 'lucide-react';
+import { Store, Phone, Lock, User, ArrowRight } from 'lucide-react';
 
 export default function Login() {
   const router = useRouter();
@@ -13,6 +13,22 @@ export default function Login() {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [timer, setTimer] = useState(0);
+  const [resendInterval, setResendInterval] = useState(null);
+
+  const startTimer = () => {
+    setTimer(60);
+    const interval = setInterval(() => {
+      setTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    if (resendInterval) clearInterval(resendInterval);
+    setResendInterval(interval);
+  };
 
   const sendOTP = async (e) => {
     e.preventDefault();
@@ -39,16 +55,7 @@ export default function Login() {
       }
 
       setStep('otp');
-      setTimer(60);
-      const interval = setInterval(() => {
-        setTimer((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      startTimer();
     } catch (err) {
       setError('Failed to send OTP. Please try again.');
     } finally {
@@ -80,8 +87,18 @@ export default function Login() {
         return;
       }
 
+      // Store token and user data
       localStorage.setItem('token', data.token);
-      router.push('/');
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
+      // Redirect based on user type - check both userType and role
+      if (data.user.userType === 'vendor' || data.user.role === 'vendor') {
+        router.push('/sell');
+      } else if (data.user.userType === 'admin' || data.user.role === 'admin') {
+        router.push('/admin');
+      } else {
+        router.push('/');
+      }
     } catch (err) {
       setError('Failed to verify OTP. Please try again.');
     } finally {
@@ -89,24 +106,39 @@ export default function Login() {
     }
   };
 
+  // Test account hints
+  const isTestCustomer = phone === '7740847114';
+  const isTestSeller = phone === '7740847112';
+  const isTestAdmin = phone === '7740847111';
+
   return (
-    <main className="min-h-screen flex items-center justify-center bg-background px-4 py-8">
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-indigo-100 px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="bg-card rounded-xl shadow-lg border border-border p-8">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
           {/* Header */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <Store className="w-8 h-8 text-primary" />
-              <h1 className="text-3xl font-bold text-foreground">Zubika</h1>
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center">
+                <Store className="w-7 h-7 text-white" />
+              </div>
             </div>
-            <p className="text-muted-foreground">Sign in to your account</p>
+            <h1 className="text-3xl font-bold text-gray-900">Zubika</h1>
+            <p className="text-gray-500 mt-2">Sign in to your account</p>
+          </div>
+
+          {/* Test Accounts Info */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
+            <p className="text-sm font-medium text-blue-800 mb-2">Test Accounts:</p>
+            <p className="text-xs text-blue-600">Buyer: 7740847114 → OTP: 123456</p>
+            <p className="text-xs text-blue-600">Seller: 7740847112 → OTP: 123456</p>
+            <p className="text-xs text-blue-600">Admin: 7740847111 → OTP: 123456</p>
           </div>
 
           {/* Phone Step */}
           {step === 'phone' && (
             <form onSubmit={sendOTP} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                   <Phone className="w-4 h-4" />
                   Mobile Number
                 </label>
@@ -115,7 +147,7 @@ export default function Login() {
                     type="text"
                     value="+91"
                     disabled
-                    className="w-14 px-3 py-2 border border-border rounded-lg bg-muted text-foreground text-center font-medium"
+                    className="w-16 px-3 py-3 border border-gray-200 rounded-xl bg-gray-100 text-gray-700 text-center font-semibold"
                   />
                   <input
                     type="tel"
@@ -126,25 +158,32 @@ export default function Login() {
                       setError('');
                     }}
                     placeholder="9876543210"
-                    className="flex-1 px-4 py-2 border border-border rounded-lg bg-secondary text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                    className="flex-1 px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                     required
                   />
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">We'll send you an OTP to verify your number</p>
+                <p className="text-xs text-gray-500 mt-2">We'll send you an OTP to verify your number</p>
               </div>
 
               {error && (
-                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                  <p className="text-sm text-destructive">{error}</p>
+                <div className="p-4 bg-red-50 border border-red-100 rounded-xl">
+                  <p className="text-sm text-red-600">{error}</p>
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={loading || phone.length !== 10}
-                className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {loading ? 'Sending OTP...' : 'Send OTP'}
+                {loading ? (
+                  <span>Sending OTP...</span>
+                ) : (
+                  <>
+                    <span>Send OTP</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
           )}
@@ -153,11 +192,11 @@ export default function Login() {
           {step === 'otp' && (
             <form onSubmit={verifyOTP} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                   <Lock className="w-4 h-4" />
                   Enter OTP
                 </label>
-                <p className="text-sm text-muted-foreground mb-4">We sent a 6-digit OTP to +91{phone}</p>
+                <p className="text-sm text-gray-500 mb-4">We sent a 6-digit OTP to +91 {phone}</p>
                 <input
                   type="text"
                   maxLength="6"
@@ -167,14 +206,21 @@ export default function Login() {
                     setError('');
                   }}
                   placeholder="000000"
-                  className="w-full px-4 py-3 text-center text-3xl tracking-widest border border-border rounded-lg bg-secondary text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent font-bold"
+                  className="w-full px-4 py-4 text-center text-3xl tracking-widest border border-gray-200 rounded-xl bg-gray-50 text-gray-900 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                   required
                 />
+                
+                {/* Show correct OTP for test accounts */}
+                {(isTestCustomer || isTestSeller || isTestAdmin) && (
+                  <div className="mt-2 text-center text-sm text-green-600 font-medium">
+                    Demo OTP: 123456
+                  </div>
+                )}
               </div>
 
               {error && (
-                <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                  <p className="text-sm text-destructive">{error}</p>
+                <div className="p-4 bg-red-50 border border-red-100 rounded-xl">
+                  <p className="text-sm text-red-600">{error}</p>
                 </div>
               )}
 
@@ -185,17 +231,17 @@ export default function Login() {
                     setStep('phone');
                     setOtp('');
                   }}
-                  className="text-primary hover:underline font-medium"
+                  className="text-blue-600 hover:text-blue-700 font-medium"
                 >
                   Change Number
                 </button>
                 {timer > 0 ? (
-                  <span className="text-muted-foreground">Resend in {timer}s</span>
+                  <span className="text-gray-500">Resend in {timer}s</span>
                 ) : (
                   <button
                     type="button"
                     onClick={sendOTP}
-                    className="text-primary hover:underline font-medium"
+                    className="text-blue-600 hover:text-blue-700 font-medium"
                   >
                     Resend OTP
                   </button>
@@ -205,9 +251,16 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading || otp.length !== 6}
-                className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg font-medium hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {loading ? 'Verifying...' : 'Verify & Login'}
+                {loading ? (
+                  <span>Verifying...</span>
+                ) : (
+                  <>
+                    <span>Verify & Login</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
           )}
@@ -215,19 +268,19 @@ export default function Login() {
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-border"></div>
+              <div className="w-full border-t border-gray-200"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-card text-muted-foreground">New user?</span>
+              <span className="px-3 bg-white text-gray-500">New to Zubika?</span>
             </div>
           </div>
 
           {/* Sign Up Link */}
           <Link
             href="/auth/register"
-            className="block w-full px-4 py-2 border border-border text-primary rounded-lg font-medium hover:bg-secondary transition text-center"
+            className="block w-full px-4 py-3 border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:border-blue-500 hover:text-blue-600 transition text-center"
           >
-            Create Account
+            Create New Account
           </Link>
         </div>
       </div>

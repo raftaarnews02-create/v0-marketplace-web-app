@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
-import { Search, ShoppingCart, Store, TrendingUp, MapPin, Star, ChevronRight } from 'lucide-react';
+import { Search, ShoppingCart, Store, TrendingUp, MapPin, Star, ChevronRight, Loader2 } from 'lucide-react';
 
 const SHOP_CATEGORIES = [
   { id: 1, name: 'Fashion & Apparel', icon: '👕', count: 234 },
@@ -15,25 +16,34 @@ const SHOP_CATEGORIES = [
   { id: 6, name: 'Books & Media', icon: '📚', count: 89 },
 ];
 
-const FEATURED_SHOPS = [
-  { id: 1, name: 'TechHub Store', category: 'Electronics', rating: 4.8, reviews: 1230, location: 'Mumbai' },
-  { id: 2, name: 'Fashion Forward', category: 'Fashion', rating: 4.6, reviews: 890, location: 'Delhi' },
-  { id: 3, name: 'Home Essentials', category: 'Home', rating: 4.7, reviews: 650, location: 'Bangalore' },
-  { id: 4, name: 'Beauty & Glow', category: 'Beauty', rating: 4.9, reviews: 1100, location: 'Pune' },
-];
-
-const FEATURED_PRODUCTS = [
-  { id: 1, name: 'Wireless Headphones', shop: 'TechHub Store', price: 2999, rating: 4.5, reviews: 320, image: '🎧' },
-  { id: 2, name: 'Cotton T-Shirt Pack', shop: 'Fashion Forward', price: 499, rating: 4.2, reviews: 180, image: '👕' },
-  { id: 3, name: 'Yoga Mat Premium', shop: 'Sports Zone', price: 1299, rating: 4.7, reviews: 450, image: '🧘' },
-  { id: 4, name: 'LED Desk Lamp', shop: 'Home Essentials', price: 899, rating: 4.4, reviews: 220, image: '💡' },
-];
-
 export default function Home() {
   const { user } = useAuth();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('shops');
+  const [shops, setShops] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchHomeData();
+  }, []);
+
+  const fetchHomeData = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/home?type=all');
+      if (response.ok) {
+        const data = await response.json();
+        setShops(data.shops || []);
+        setProducts(data.products || []);
+      }
+    } catch (error) {
+      console.error('Error fetching home data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -117,8 +127,8 @@ export default function Home() {
           {SHOP_CATEGORIES.map((cat) => (
             <Link
               key={cat.id}
-              href={`/category/${cat.name.toLowerCase().replace(/\s+/g, '-')}`}
-              className="flex flex-col items-center justify-center p-6 bg-card border border-border rounded-lg hover:shadow-md hover:border-accent transition"
+              href={`/browse?category=${cat.name.toLowerCase().replace(/\s+/g, '-')}`}
+              className="flex flex-col items-center justify-center p-6 bg-card border border-border rounded-lg hover:shadow-md hover:border-accent transition cursor-pointer"
             >
               <span className="text-4xl mb-3">{cat.icon}</span>
               <h3 className="text-sm font-semibold text-foreground text-center mb-1">{cat.name}</h3>
@@ -149,65 +159,120 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Featured Shops */}
-        {activeTab === 'shops' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {FEATURED_SHOPS.map((shop) => (
-              <Link
-                key={shop.id}
-                href={`/shop/${shop.id}`}
-                className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg hover:border-accent transition group"
-              >
-                <div className="bg-secondary h-40 flex items-center justify-center text-6xl group-hover:bg-muted transition">
-                  🏪
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-foreground mb-1">{shop.name}</h3>
-                  <p className="text-sm text-muted-foreground mb-3">{shop.category}</p>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-medium text-foreground">{shop.rating}</span>
-                      <span className="text-xs text-muted-foreground">({shop.reviews})</span>
-                    </div>
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <MapPin className="w-3 h-3" />
-                      {shop.location}
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))}
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
           </div>
         )}
 
-        {/* Trending Products */}
-        {activeTab === 'products' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {FEATURED_PRODUCTS.map((product) => (
-              <Link
-                key={product.id}
-                href={`/product/${product.id}`}
-                className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg hover:border-accent transition group"
-              >
-                <div className="bg-secondary h-40 flex items-center justify-center text-6xl group-hover:bg-muted transition">
-                  {product.image}
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-foreground mb-1 line-clamp-2">{product.name}</h3>
-                  <p className="text-xs text-muted-foreground mb-3">{product.shop}</p>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-medium text-foreground">{product.rating}</span>
-                      <span className="text-xs text-muted-foreground">({product.reviews})</span>
+        {/* Featured Shops */}
+        {!loading && activeTab === 'shops' && (
+          <>
+            {shops.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {shops.map((shop) => (
+                  <Link
+                    key={shop.id}
+                    href={`/shops/${shop.id}`}
+                    className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg hover:border-accent transition group cursor-pointer"
+                  >
+                    <div className="h-40 bg-secondary flex items-center justify-center relative overflow-hidden">
+                      {shop.images && shop.images.length > 0 ? (
+                        <Image
+                          src={shop.images[0]}
+                          alt={shop.shopName}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <span className="text-6xl">🏪</span>
+                      )}
                     </div>
-                  </div>
-                  <p className="text-lg font-bold text-primary">₹{product.price}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
+                    <div className="p-4">
+                      <h3 className="font-semibold text-foreground mb-1 line-clamp-1">{shop.shopName}</h3>
+                      <p className="text-sm text-muted-foreground mb-3">{shop.category}</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
+                          <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                          <span className="text-sm font-medium text-foreground">{shop.rating || 'New'}</span>
+                          <span className="text-xs text-muted-foreground">({shop.ratingCount || 0})</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <MapPin className="w-3 h-3" />
+                          {shop.location?.city}, {shop.location?.state}
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-muted rounded-lg">
+                <Store size={48} className="mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No shops available yet</p>
+                <Link href="/auth/register" className="mt-4 inline-block text-primary hover:underline font-medium">
+                  Register as a Seller
+                </Link>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Trending Products */}
+        {!loading && activeTab === 'products' && (
+          <>
+            {products.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {products.map((product) => (
+                  <Link
+                    key={product.id}
+                    href={`/product/${product.id}`}
+                    className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg hover:border-accent transition group cursor-pointer"
+                  >
+                    <div className="h-40 bg-secondary flex items-center justify-center relative overflow-hidden">
+                      {product.images && product.images.length > 0 ? (
+                        <Image
+                          src={product.images[0]}
+                          alt={product.title}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <span className="text-6xl">📦</span>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <h3 className="font-semibold text-foreground mb-1 line-clamp-2 text-sm">{product.title}</h3>
+                      <p className="text-xs text-muted-foreground mb-3">{product.category}</p>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-1">
+                          <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                          <span className="text-sm font-medium text-foreground">{product.rating || 'New'}</span>
+                          <span className="text-xs text-muted-foreground">({product.ratingCount || 0})</span>
+                        </div>
+                      </div>
+                      <p className="text-lg font-bold text-primary">₹{product.price}</p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-muted rounded-lg">
+                <TrendingUp size={48} className="mx-auto text-muted-foreground mb-4" />
+                <p className="text-muted-foreground">No products available yet</p>
+                <Link href="/auth/register" className="mt-4 inline-block text-primary hover:underline font-medium">
+                  Register as a Seller
+                </Link>
+              </div>
+            )}
+          </>
         )}
       </section>
 

@@ -15,17 +15,22 @@ export function AuthProvider({ children }) {
     const storedUser = localStorage.getItem('user');
 
     if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      try {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
     }
     setLoading(false);
   }, []);
 
-  const login = async (email, password) => {
-    const response = await fetch('/api/auth/login', {
+  const login = async (phone, otp) => {
+    const response = await fetch('/api/auth/verify-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ phone, otp }),
     });
 
     const data = await response.json();
@@ -39,11 +44,11 @@ export function AuthProvider({ children }) {
     return data;
   };
 
-  const register = async (name, email, password, confirmPassword, userType) => {
-    const response = await fetch('/api/auth/register', {
+  const register = async (name, userType, phone, otp) => {
+    const response = await fetch('/api/auth/verify-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password, confirmPassword, userType }),
+      body: JSON.stringify({ phone, otp, name, userType }),
     });
 
     const data = await response.json();
@@ -64,8 +69,13 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('user');
   };
 
+  const updateUser = (userData) => {
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

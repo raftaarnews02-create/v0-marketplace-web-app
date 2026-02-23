@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, use } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { Star, MapPin, Phone, Mail, ArrowLeft, MessageCircle } from 'lucide-react';
 
 export default function ProductDetails({ params }) {
-  const { id } = params;
+  // Unwrap params in Next.js 15
+  const resolvedParams = use(params);
+  const { id } = resolvedParams;
   const { user, token } = useAuth();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,7 +19,9 @@ export default function ProductDetails({ params }) {
   const [messageSending, setMessageSending] = useState(false);
 
   useEffect(() => {
-    fetchProduct();
+    if (id) {
+      fetchProduct();
+    }
   }, [id]);
 
   const fetchProduct = async () => {
@@ -53,7 +57,7 @@ export default function ProductDetails({ params }) {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          receiver: product.seller._id,
+          receiver: product.vendor?._id || product.vendor,
           content: messageText,
           product: product._id,
         }),
@@ -141,7 +145,7 @@ export default function ProductDetails({ params }) {
                 <div className="flex items-center gap-2">
                   <Star size={20} className="fill-yellow-400 text-yellow-400" />
                   <span className="font-semibold">{product.rating.toFixed(1)}</span>
-                  <span className="text-muted-foreground">({product.reviews?.length || 0} reviews)</span>
+                  <span className="text-muted-foreground">({product.ratingCount || 0} reviews)</span>
                 </div>
               )}
             </div>
@@ -150,12 +154,12 @@ export default function ProductDetails({ params }) {
             <div className="mb-6">
               <span
                 className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                  product.availability
+                  product.status === 'active'
                     ? 'bg-green-100 text-green-800'
                     : 'bg-red-100 text-red-800'
                 }`}
               >
-                {product.availability ? 'Available' : 'Unavailable'}
+                {product.status === 'active' ? 'Available' : 'Unavailable'}
               </span>
             </div>
 
@@ -241,17 +245,17 @@ export default function ProductDetails({ params }) {
               {/* Seller Avatar & Name */}
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white text-xl font-bold">
-                  {product.seller.name?.charAt(0).toUpperCase()}
+                  {(product.vendor?.name || 'S').charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <Link href={`/seller/${product.seller._id}`} className="font-semibold text-foreground hover:underline">
-                    {product.seller.name}
-                  </Link>
+                  <p className="font-semibold text-foreground">
+                    {product.vendor?.name || 'Seller'}
+                  </p>
                   <p className="text-xs text-muted-foreground">Verified Seller</p>
-                  {product.seller.rating > 0 && (
+                  {product.vendor?.rating > 0 && (
                     <div className="flex items-center gap-1 mt-1">
                       <Star size={14} className="fill-yellow-400 text-yellow-400" />
-                      <span className="text-xs font-medium">{product.seller.rating.toFixed(1)}</span>
+                      <span className="text-xs font-medium">{product.vendor.rating.toFixed(1)}</span>
                     </div>
                   )}
                 </div>
@@ -259,21 +263,17 @@ export default function ProductDetails({ params }) {
 
               {/* Contact Options */}
               <div className="space-y-2 mb-6">
-                <p className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Mail size={16} />
-                  {product.seller.email || 'Not provided'}
-                </p>
-                {product.seller.phone && (
+                {product.vendor?.phone && (
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
                     <Phone size={16} />
-                    {product.seller.phone}
+                    {product.vendor.phone}
                   </p>
                 )}
               </div>
 
               {/* Action Buttons */}
               <div className="space-y-2">
-                {user && user.id !== product.seller._id ? (
+                {user && user.id !== (product.vendor?._id || product.vendor)?._id ? (
                   <>
                     <button
                       onClick={() => setMessageModalOpen(true)}
@@ -282,11 +282,8 @@ export default function ProductDetails({ params }) {
                       <MessageCircle size={18} />
                       Message Seller
                     </button>
-                    <button className="w-full px-4 py-3 border border-primary text-primary rounded-lg hover:bg-primary/5 transition-colors font-medium">
-                      Add to Favorites
-                    </button>
                   </>
-                ) : user && user.id === product.seller._id ? (
+                ) : user && user.id === (product.vendor?._id || product.vendor)?._id ? (
                   <Link
                     href="/sell"
                     className="block w-full px-4 py-3 bg-secondary text-secondary-foreground rounded-lg hover:opacity-90 transition-opacity font-medium text-center"
@@ -314,14 +311,14 @@ export default function ProductDetails({ params }) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
           <div className="bg-card rounded-lg p-6 max-w-md w-full">
             <h3 className="text-lg font-semibold text-foreground mb-4">
-              Message {product.seller.name}
+              Message {product.vendor?.name || 'Seller'}
             </h3>
 
             <form onSubmit={handleSendMessage} className="space-y-4">
               <textarea
                 value={messageText}
                 onChange={(e) => setMessageText(e.target.value)}
-                placeholder="Ask about this service..."
+                placeholder="Ask about this product..."
                 rows="4"
                 className="w-full px-4 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-background"
               />

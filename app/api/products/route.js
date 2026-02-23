@@ -9,7 +9,7 @@ function verifyToken(req) {
   if (!token) return null;
 
   try {
-    return jwt.verify(token, process.env.JWT_SECRET);
+    return jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
   } catch (error) {
     return null;
   }
@@ -23,9 +23,44 @@ export async function GET(request) {
     const category = searchParams.get('category');
     const search = searchParams.get('search');
     const page = parseInt(searchParams.get('page')) || 1;
+    const sellerId = searchParams.get('seller');
     const limit = 12;
 
-    let query = { availability: true };
+    // If seller parameter is provided with a specific ID, return products for that seller
+    if (sellerId && sellerId !== 'true') {
+      const products = await Product.find({ vendor: sellerId })
+        .sort({ createdAt: -1 });
+
+      return NextResponse.json({
+        products,
+        total: products.length,
+      });
+    }
+
+    // If seller=true, return products for the authenticated seller
+    if (sellerId === 'true') {
+      const user = verifyToken(request);
+      if (!user) {
+        return NextResponse.json(
+          { error: 'Unauthorized' },
+          { status: 401 }
+        );
+      }
+
+      const products = await Product.find({ vendor: user.userId })
+        .sort({ createdAt: -1 });
+
+      return NextResponse.json({
+        products,
+        total: products.length,
+      });
+    }
+
+    // Public: Return only approved products
+    let query = { 
+      'moderation.status': 'approved',
+      status: 'active'
+    };
 
     if (category) {
       query.category = category;
@@ -41,7 +76,7 @@ export async function GET(request) {
 
     const skip = (page - 1) * limit;
     const products = await Product.find(query)
-      .populate('seller', 'name profileImage')
+      .populate('vendor', 'name profileImage')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);

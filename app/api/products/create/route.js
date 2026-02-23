@@ -3,7 +3,6 @@ import jwt from 'jsonwebtoken';
 import { connectDB } from '@/lib/mongodb';
 import Product from '@/lib/models/Product';
 import User from '@/lib/models/User';
-import Vendor from '@/lib/models/Vendor';
 
 export async function POST(req) {
   try {
@@ -50,14 +49,6 @@ export async function POST(req) {
       );
     }
 
-    const vendor = await Vendor.findOne({ user: vendorId });
-    if (!vendor || vendor.verificationStatus !== 'approved') {
-      return NextResponse.json(
-        { error: 'Your vendor account must be verified to list products' },
-        { status: 403 }
-      );
-    }
-
     // Create product
     const product = new Product({
       title,
@@ -71,24 +62,23 @@ export async function POST(req) {
       discount: discount || 0,
       location,
       tags,
-      status: 'active',
+      status: 'pending',
       moderation: {
+        status: 'pending',
+      },
+      payment: {
+        amount: 0,
+        commission: 0,
         status: 'pending',
       },
     });
 
     await product.save();
 
-    // Update vendor product count
-    await Vendor.updateOne(
-      { user: vendorId },
-      { $inc: { totalProducts: 1 } }
-    );
-
     return NextResponse.json(
       {
         success: true,
-        message: 'Product created successfully',
+        message: 'Product created successfully. Please complete the commission payment to submit for review.',
         product: {
           id: product._id,
           title: product.title,

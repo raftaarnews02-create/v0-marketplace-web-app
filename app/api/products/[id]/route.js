@@ -17,10 +17,10 @@ function verifyToken(req) {
 export async function GET(request, { params }) {
   try {
     await dbConnect();
-    const { id } = params;
+    const { id } = await params;
 
     const product = await Product.findById(id).populate([
-      { path: 'seller', select: 'name profileImage' },
+      { path: 'vendor', select: 'name profileImage' },
       { path: 'reviews.user', select: 'name profileImage' },
     ]);
 
@@ -52,7 +52,7 @@ export async function PUT(request, { params }) {
     }
 
     await dbConnect();
-    const { id } = params;
+    const { id } = await params;
     const data = await request.json();
 
     const product = await Product.findById(id);
@@ -64,7 +64,7 @@ export async function PUT(request, { params }) {
     }
 
     // Check ownership
-    if (product.seller.toString() !== user.userId) {
+    if (product.vendor.toString() !== user.userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }
@@ -99,7 +99,7 @@ export async function DELETE(request, { params }) {
     }
 
     await dbConnect();
-    const { id } = params;
+    const { id } = await params;
 
     const product = await Product.findById(id);
     if (!product) {
@@ -110,7 +110,7 @@ export async function DELETE(request, { params }) {
     }
 
     // Check ownership
-    if (product.seller.toString() !== user.userId) {
+    if (product.vendor.toString() !== user.userId) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 403 }

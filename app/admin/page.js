@@ -2,17 +2,40 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { Users, Package, MessageSquare, TrendingUp, Ban, CheckCircle } from 'lucide-react';
+import { Users, Package, MessageSquare, TrendingUp, Ban, CheckCircle, Store, ShoppingBag } from 'lucide-react';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const router = useRouter();
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalProducts: 0,
     totalSellers: 0,
     totalMessages: 0,
   });
+
+  useEffect(() => {
+    // Check if user is admin - check both userType and role
+    if (!user) {
+      // Try to get user from localStorage
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        if (parsedUser.userType !== 'admin' && parsedUser.role !== 'admin') {
+          router.push('/auth/login');
+          return;
+        }
+      } else {
+        router.push('/auth/login');
+        return;
+      }
+    } else if (user.userType !== 'admin' && user.role !== 'admin') {
+      router.push('/auth/login');
+      return;
+    }
+  }, [user, router]);
 
   useEffect(() => {
     // Fetch dashboard stats
@@ -33,7 +56,11 @@ export default function AdminDashboard() {
     fetchStats();
   }, []);
 
-  if (!user || user.userType !== 'admin') {
+  // Check if user is admin
+  const isAdmin = user?.userType === 'admin' || user?.role === 'admin';
+  
+  // If not admin, show access denied
+  if (!isAdmin) {
     return (
       <main className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -51,8 +78,11 @@ export default function AdminDashboard() {
     <main className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-card border-b border-border shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Welcome, {user?.name}</span>
+          </div>
         </div>
       </header>
 
@@ -103,6 +133,40 @@ export default function AdminDashboard() {
 
         {/* Management Sections */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Shops Pending Review */}
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <Store size={24} className="text-yellow-600" />
+              <h2 className="text-lg font-semibold text-foreground">Shops Pending Review</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Review and approve shop listings submitted by sellers
+            </p>
+            <Link 
+              href="/admin/shops" 
+              className="block w-full px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium text-center"
+            >
+              View Pending Shops
+            </Link>
+          </div>
+
+          {/* Products Pending Review */}
+          <div className="bg-card border border-border rounded-lg p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <ShoppingBag size={24} className="text-yellow-600" />
+              <h2 className="text-lg font-semibold text-foreground">Products Pending Review</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">
+              Review and approve product listings submitted by sellers
+            </p>
+            <Link 
+              href="/admin/products" 
+              className="block w-full px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium text-center"
+            >
+              View Pending Products
+            </Link>
+          </div>
+
           {/* Users Management */}
           <div className="bg-card border border-border rounded-lg p-6">
             <div className="flex items-center gap-3 mb-6">
@@ -112,33 +176,9 @@ export default function AdminDashboard() {
             <p className="text-sm text-muted-foreground mb-4">
               View and manage all registered users, handle ban/unban requests
             </p>
-            <div className="space-y-2">
-              <button className="w-full px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-medium">
-                View All Users
-              </button>
-              <button className="w-full px-4 py-2 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20 transition-colors text-sm font-medium">
-                Banned Users
-              </button>
-            </div>
-          </div>
-
-          {/* Products Management */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <Package size={24} className="text-primary" />
-              <h2 className="text-lg font-semibold text-foreground">Products Management</h2>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Review and moderate product listings, remove inappropriate content
-            </p>
-            <div className="space-y-2">
-              <button className="w-full px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-medium">
-                All Products
-              </button>
-              <button className="w-full px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium">
-                Pending Review
-              </button>
-            </div>
+            <button className="w-full px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-medium">
+              View All Users
+            </button>
           </div>
 
           {/* Sellers Management */}
@@ -150,33 +190,9 @@ export default function AdminDashboard() {
             <p className="text-sm text-muted-foreground mb-4">
               Verify seller accounts, manage seller status and ratings
             </p>
-            <div className="space-y-2">
-              <button className="w-full px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-medium">
-                All Sellers
-              </button>
-              <button className="w-full px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition-colors text-sm font-medium">
-                Verification Pending
-              </button>
-            </div>
-          </div>
-
-          {/* Reports Management */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <MessageSquare size={24} className="text-primary" />
-              <h2 className="text-lg font-semibold text-foreground">Reports & Moderation</h2>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Handle user reports, disputes and moderation requests
-            </p>
-            <div className="space-y-2">
-              <button className="w-full px-4 py-2 bg-destructive/10 text-destructive rounded-lg hover:bg-destructive/20 transition-colors text-sm font-medium">
-                Active Reports
-              </button>
-              <button className="w-full px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-medium">
-                Resolved Cases
-              </button>
-            </div>
+            <button className="w-full px-4 py-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors text-sm font-medium">
+              All Sellers
+            </button>
           </div>
         </div>
 

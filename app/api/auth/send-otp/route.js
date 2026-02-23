@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import mongoose from 'mongoose';
 import { connectDB } from '@/lib/mongodb';
 import User from '@/lib/models/User';
-import { generateOTP, generateOTPExpiry, storeDemoOTP } from '@/lib/otp';
+import { generateOTP, generateOTPExpiry, storeDemoOTP, getTestUser } from '@/lib/otp';
 
 export async function POST(req) {
   try {
@@ -15,7 +14,7 @@ export async function POST(req) {
       );
     }
 
-    const fullPhone = `${countryCode}${phone}`.replace(/-/g, '');
+    const fullPhone = `${countryCode}${phone}`.replace(/-/g, '').replace(/^\+?91/, '');
 
     await connectDB();
 
@@ -23,8 +22,11 @@ export async function POST(req) {
     let user = await User.findOne({ phone: fullPhone });
 
     // Generate OTP
-    const otp = generateOTP();
+    const otp = generateOTP(fullPhone);
     const expiresAt = generateOTPExpiry(10); // 10 minutes
+
+    // Get test user data if this is a test phone
+    const testUser = getTestUser(fullPhone);
 
     if (user) {
       // Update existing user's OTP
@@ -33,17 +35,25 @@ export async function POST(req) {
         expiresAt,
         attempts: 0,
       };
+      // Update role and userType if test user
+      if (testUser) {
+        user.role = testUser.role;
+        user.userType = testUser.userType;
+      }
       await user.save();
     } else {
       // Create new user (will be completed on registration)
       user = new User({
         phone: fullPhone,
-        name: 'New User',
+        name: testUser ? testUser.name : '',
         otp: {
           code: otp,
           expiresAt,
           attempts: 0,
         },
+        userType: testUser ? testUser.userType : 'customer',
+        role: testUser ? testUser.role : 'buyer',
+        isVerified: testUser ? true : false,
       });
       await user.save();
     }
@@ -66,6 +76,23 @@ export async function POST(req) {
     );
   } catch (error) {
     console.error('Send OTP error:', error);
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return NextResponse.json(
+        { error: 'Phone number already registered. Please try logging in.' },
+        { status: 409 }
+      );
+    }
+    
     return NextResponse.json(
       { error: 'Failed to send OTP' },
       { status: 500 }
