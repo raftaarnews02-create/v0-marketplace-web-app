@@ -8,8 +8,8 @@ const geist = Geist({ subsets: ['latin'] });
 const geistMono = Geist_Mono({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'ServiceHub - Find Local Services & Businesses',
-  description: 'Find and book local services like JustDial. Connect with verified sellers and service providers.',
+  title: 'Zubika - Multi-Vendor Marketplace',
+  description: 'Zubika is a modern multi-vendor e-commerce marketplace. Shop from verified vendors, sell your products, and experience secure payments with Razorpay.',
   generator: 'v0.app',
   icons: {
     icon: [
