@@ -1,165 +1,249 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { useProducts } from '@/hooks/useProducts';
-import SearchBar from '@/components/SearchBar';
-import ProductCard from '@/components/ProductCard';
-import { ShoppingCart, Heart, Star, Zap, Shield } from 'lucide-react';
+import { Search, ShoppingCart, Store, TrendingUp, MapPin, Star, ChevronRight } from 'lucide-react';
 
-const FEATURED_PRODUCTS = [
-  { id: 1, title: 'Premium Wireless Headphones', price: 2999, rating: 4.5, vendor: 'TechGear', discount: 20 },
-  { id: 2, title: 'Cotton T-Shirt', price: 499, rating: 4.2, vendor: 'StyleHub', discount: 15 },
-  { id: 3, title: 'Stainless Steel Water Bottle', price: 799, rating: 4.7, vendor: 'EcoProducts', discount: 10 },
-  { id: 4, title: 'LED Desk Lamp', price: 1299, rating: 4.4, vendor: 'LightWorks', discount: 25 },
+const SHOP_CATEGORIES = [
+  { id: 1, name: 'Fashion & Apparel', icon: '👕', count: 234 },
+  { id: 2, name: 'Electronics', icon: '📱', count: 456 },
+  { id: 3, name: 'Home & Garden', icon: '🏠', count: 178 },
+  { id: 4, name: 'Health & Beauty', icon: '💄', count: 321 },
+  { id: 5, name: 'Sports & Outdoors', icon: '⚽', count: 145 },
+  { id: 6, name: 'Books & Media', icon: '📚', count: 89 },
 ];
 
-const CATEGORIES = [
-  { name: 'Electronics', emoji: '📱' },
-  { name: 'Fashion', emoji: '👕' },
-  { name: 'Home', emoji: '🏠' },
-  { name: 'Books', emoji: '📚' },
-  { name: 'Sports', emoji: '⚽' },
-  { name: 'Beauty', emoji: '💄' },
+const FEATURED_SHOPS = [
+  { id: 1, name: 'TechHub Store', category: 'Electronics', rating: 4.8, reviews: 1230, location: 'Mumbai' },
+  { id: 2, name: 'Fashion Forward', category: 'Fashion', rating: 4.6, reviews: 890, location: 'Delhi' },
+  { id: 3, name: 'Home Essentials', category: 'Home', rating: 4.7, reviews: 650, location: 'Bangalore' },
+  { id: 4, name: 'Beauty & Glow', category: 'Beauty', rating: 4.9, reviews: 1100, location: 'Pune' },
+];
+
+const FEATURED_PRODUCTS = [
+  { id: 1, name: 'Wireless Headphones', shop: 'TechHub Store', price: 2999, rating: 4.5, reviews: 320, image: '🎧' },
+  { id: 2, name: 'Cotton T-Shirt Pack', shop: 'Fashion Forward', price: 499, rating: 4.2, reviews: 180, image: '👕' },
+  { id: 3, name: 'Yoga Mat Premium', shop: 'Sports Zone', price: 1299, rating: 4.7, reviews: 450, image: '🧘' },
+  { id: 4, name: 'LED Desk Lamp', shop: 'Home Essentials', price: 899, rating: 4.4, reviews: 220, image: '💡' },
 ];
 
 export default function Home() {
   const { user } = useAuth();
-  const { products, loading } = useProducts();
-  const [featured] = useState(FEATURED_PRODUCTS);
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('shops');
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
+  };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-slate-950 to-slate-900">
+    <main className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-slate-950/80 backdrop-blur border-b border-slate-800">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-cyan-500">
-              Zubika
-            </h1>
-            {user ? (
-              <div className="text-right">
-                <p className="text-sm font-medium text-white">{user.name}</p>
-                <p className="text-xs text-slate-400">{user.userType}</p>
+      <header className="sticky top-0 z-40 bg-white border-b border-border shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            {/* Logo */}
+            <Link href="/" className="flex items-center gap-2">
+              <Store className="w-8 h-8 text-primary" />
+              <span className="text-2xl font-bold text-primary">Zubika</span>
+            </Link>
+
+            {/* Search */}
+            <form onSubmit={handleSearch} className="flex-1 max-w-md mx-8">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search shops, products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2 border border-border rounded-lg bg-secondary text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+                <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <Search className="w-5 h-5" />
+                </button>
               </div>
-            ) : (
-              <Link href="/auth/login" className="text-slate-400 hover:text-white transition">
-                Sign In
-              </Link>
-            )}
+            </form>
+
+            {/* Auth */}
+            <div className="flex items-center gap-4">
+              {user ? (
+                <div className="flex items-center gap-4">
+                  <Link href="/cart" className="relative p-2 hover:bg-secondary rounded-lg transition">
+                    <ShoppingCart className="w-6 h-6 text-foreground" />
+                  </Link>
+                  <Link href="/account" className="text-foreground hover:text-primary transition">
+                    <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-bold text-sm">
+                      {user.name?.charAt(0).toUpperCase()}
+                    </div>
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Link href="/auth/login" className="px-4 py-2 text-primary hover:bg-secondary rounded-lg transition font-medium">
+                    Sign In
+                  </Link>
+                  <Link href="/auth/register" className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition font-medium">
+                    Sign Up
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Hero */}
-      <div className="max-w-6xl mx-auto px-4 py-12">
-        {/* Search Section */}
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-white mb-4">
-            Shop from Verified Vendors
-          </h2>
-          <p className="text-xl text-slate-400 mb-8">
-            Millions of products, secure payments, fast delivery
+      {/* Hero Section */}
+      <section className="bg-gradient-to-r from-primary/5 to-accent/5 border-b border-border py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-4">
+            Discover Amazing Shops & Products
+          </h1>
+          <p className="text-lg text-muted-foreground mb-8">
+            Find verified sellers, browse quality products, and shop with confidence
           </p>
-          <SearchBar placeholder="Search products, vendors..." />
+        </div>
+      </section>
+
+      {/* Categories */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <h2 className="text-2xl font-bold text-foreground mb-6">Shop by Category</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+          {SHOP_CATEGORIES.map((cat) => (
+            <Link
+              key={cat.id}
+              href={`/category/${cat.name.toLowerCase().replace(/\s+/g, '-')}`}
+              className="flex flex-col items-center justify-center p-6 bg-card border border-border rounded-lg hover:shadow-md hover:border-accent transition"
+            >
+              <span className="text-4xl mb-3">{cat.icon}</span>
+              <h3 className="text-sm font-semibold text-foreground text-center mb-1">{cat.name}</h3>
+              <p className="text-xs text-muted-foreground">{cat.count} items</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Tabs */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex gap-4 border-b border-border mb-8">
+          <button
+            onClick={() => setActiveTab('shops')}
+            className={`px-4 py-3 font-medium border-b-2 transition ${
+              activeTab === 'shops' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Featured Shops
+          </button>
+          <button
+            onClick={() => setActiveTab('products')}
+            className={`px-4 py-3 font-medium border-b-2 transition ${
+              activeTab === 'products' ? 'border-accent text-accent' : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Trending Products
+          </button>
         </div>
 
-        {/* Categories */}
-        <div className="mb-16">
-          <h3 className="text-xl font-bold text-white mb-6">Shop by Category</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {CATEGORIES.map((cat) => (
-              <Link
-                key={cat.name}
-                href={`/shop?cat=${cat.name}`}
-                className="flex flex-col items-center justify-center p-4 bg-slate-800 border border-slate-700 rounded-lg hover:border-blue-500 transition"
-              >
-                <span className="text-3xl mb-2">{cat.emoji}</span>
-                <span className="text-sm text-slate-300">{cat.name}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Featured Products */}
-        <div className="mb-12">
-          <h3 className="text-2xl font-bold text-white mb-8">Featured Products</h3>
+        {/* Featured Shops */}
+        {activeTab === 'shops' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featured.map((product) => (
+            {FEATURED_SHOPS.map((shop) => (
               <Link
-                key={product.id}
-                href={`/product/${product.id}`}
-                className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden hover:border-blue-500 transition group"
+                key={shop.id}
+                href={`/shop/${shop.id}`}
+                className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg hover:border-accent transition group"
               >
-                <div className="bg-slate-700 h-40 flex items-center justify-center text-4xl group-hover:bg-slate-600">
-                  📷
+                <div className="bg-secondary h-40 flex items-center justify-center text-6xl group-hover:bg-muted transition">
+                  🏪
                 </div>
                 <div className="p-4">
-                  <h4 className="font-semibold text-white mb-2 line-clamp-2">{product.title}</h4>
-                  <div className="flex items-center gap-1 mb-2">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-3 h-3 ${i < Math.floor(product.rating) ? 'fill-yellow-500 text-yellow-500' : 'text-slate-600'}`}
-                      />
-                    ))}
-                    <span className="text-xs text-slate-400 ml-1">{product.rating}</span>
-                  </div>
-                  <p className="text-sm text-slate-400 mb-3">{product.vendor}</p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-white">₹{product.price}</span>
-                    <span className="text-xs bg-red-600 text-white px-2 py-1 rounded">-{product.discount}%</span>
+                  <h3 className="font-semibold text-foreground mb-1">{shop.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-3">{shop.category}</p>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                      <span className="text-sm font-medium text-foreground">{shop.rating}</span>
+                      <span className="text-xs text-muted-foreground">({shop.reviews})</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <MapPin className="w-3 h-3" />
+                      {shop.location}
+                    </div>
                   </div>
                 </div>
               </Link>
             ))}
-          </div>
-        </div>
-
-        {/* Auth Prompt */}
-        {!user && (
-          <div className="bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg p-8 text-center mb-12">
-            <h3 className="text-2xl font-bold text-white mb-4">Join Zubika Today</h3>
-            <p className="text-slate-100 mb-6">Sign up to browse, shop, or sell</p>
-            <div className="flex gap-4 justify-center">
-              <Link href="/auth/login" className="px-6 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-slate-100">
-                Sign In
-              </Link>
-              <Link href="/auth/register" className="px-6 py-2 border-2 border-white text-white rounded-lg font-semibold hover:bg-white/10">
-                Sign Up
-              </Link>
-            </div>
           </div>
         )}
 
-        {/* Features */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-            <Shield className="w-8 h-8 text-blue-500 mb-3" />
-            <h4 className="font-semibold text-white mb-2">Secure Payments</h4>
-            <p className="text-sm text-slate-400">
-              Razorpay integration for safe & instant transactions
-            </p>
+        {/* Trending Products */}
+        {activeTab === 'products' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {FEATURED_PRODUCTS.map((product) => (
+              <Link
+                key={product.id}
+                href={`/product/${product.id}`}
+                className="bg-card border border-border rounded-lg overflow-hidden hover:shadow-lg hover:border-accent transition group"
+              >
+                <div className="bg-secondary h-40 flex items-center justify-center text-6xl group-hover:bg-muted transition">
+                  {product.image}
+                </div>
+                <div className="p-4">
+                  <h3 className="font-semibold text-foreground mb-1 line-clamp-2">{product.name}</h3>
+                  <p className="text-xs text-muted-foreground mb-3">{product.shop}</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-1">
+                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                      <span className="text-sm font-medium text-foreground">{product.rating}</span>
+                      <span className="text-xs text-muted-foreground">({product.reviews})</span>
+                    </div>
+                  </div>
+                  <p className="text-lg font-bold text-primary">₹{product.price}</p>
+                </div>
+              </Link>
+            ))}
           </div>
+        )}
+      </section>
 
-          <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-            <Zap className="w-8 h-8 text-cyan-500 mb-3" />
-            <h4 className="font-semibold text-white mb-2">Verified Vendors</h4>
-            <p className="text-sm text-slate-400">
-              All sellers verified and rated by customers
-            </p>
-          </div>
-
-          <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-            <ShoppingCart className="w-8 h-8 text-green-500 mb-3" />
-            <h4 className="font-semibold text-white mb-2">Easy Shopping</h4>
-            <p className="text-sm text-slate-400">
-              Browse, compare, and checkout in minutes
-            </p>
+      {/* CTA Section */}
+      {!user && (
+        <section className="bg-primary text-primary-foreground py-12">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 className="text-3xl font-bold mb-4">Ready to Start Selling?</h2>
+            <p className="text-lg opacity-90 mb-8">Join thousands of vendors earning on Zubika. Create your shop or list products today.</p>
+            <Link href="/auth/register" className="inline-block px-8 py-3 bg-white text-primary rounded-lg font-semibold hover:bg-secondary transition">
+              Get Started Now
+            </Link>
           </div>
         </section>
-      </div>
+      )}
+
+      {/* Trust Badges */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="text-center">
+            <div className="text-4xl mb-3">✓</div>
+            <h3 className="font-semibold text-foreground mb-2">Verified Sellers</h3>
+            <p className="text-muted-foreground">All shops and products verified before going live</p>
+          </div>
+          <div className="text-center">
+            <div className="text-4xl mb-3">💳</div>
+            <h3 className="font-semibold text-foreground mb-2">Secure Payments</h3>
+            <p className="text-muted-foreground">Powered by Razorpay for safe transactions</p>
+          </div>
+          <div className="text-center">
+            <div className="text-4xl mb-3">⭐</div>
+            <h3 className="font-semibold text-foreground mb-2">Customer Ratings</h3>
+            <p className="text-muted-foreground">Real reviews from real buyers</p>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
