@@ -10,6 +10,7 @@ export default function Messages() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
+  
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
