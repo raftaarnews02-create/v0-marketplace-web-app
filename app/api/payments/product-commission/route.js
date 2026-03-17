@@ -1,30 +1,27 @@
 import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
+import Razorpay from 'razorpay';
 import { connectDB } from '@/lib/mongodb';
 import Product from '@/lib/models/Product';
 
-const mockRazorpay = {
-  createOrder: async (amount, currency = 'INR') => {
-    return {
-      id: `order_${Date.now()}`,
-      amount: Math.round(amount * 100),
-      currency,
-      status: 'created',
-      created_at: new Date(),
-    };
-  },
-};
+const LISTING_FEE = 99;
 
-const COMMISSION_RATE = 0.05;
+function getRazorpayInstance() {
+  const keyId = process.env.RAZORPAY_KEY_ID;
+  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+
+  if (!keyId || !keySecret || keyId === 'rzp_test_YOUR_KEY_ID') {
+    return null;
+  }
+
+  return new Razorpay({ key_id: keyId, key_secret: keySecret });
+}
 
 export async function POST(req) {
   try {
     const token = req.headers.get('authorization')?.split(' ')[1];
     if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
@@ -33,10 +30,7 @@ export async function POST(req) {
     const { productId } = await req.json();
 
     if (!productId) {
-      return NextResponse.json(
-        { error: 'Product ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Product ID is required' }, { status: 400 });
     }
 
     await connectDB();
@@ -44,50 +38,54 @@ export async function POST(req) {
     const product = await Product.findById(productId);
 
     if (!product) {
-      return NextResponse.json(
-        { error: 'Product not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     }
 
     if (product.vendor.toString() !== sellerId) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     }
 
-    if (product.payment.status === 'completed') {
-      return NextResponse.json(
-        { error: 'Payment already completed for this product' },
-        { status: 400 }
-      );
+    if (product.payment.status === 'completed' || product.payment.status === 'free') {
+      return NextResponse.json({ error: 'Payment already completed for this listing' }, { status: 400 });
     }
 
-    const commission = Math.round(product.price * COMMISSION_RATE);
-    const razorpayOrder = await mockRazorpay.createOrder(commission);
+    const amountInPaise = LISTING_FEE * 100;
+    let razorpayOrderId;
 
-    product.payment.razorpayOrderId = razorpayOrder.id;
-    product.payment.commission = commission;
+    const razorpay = getRazorpayInstance();
+
+    if (razorpay) {
+      const order = await razorpay.orders.create({
+        amount: amountInPaise,
+        currency: 'INR',
+        receipt: `product_${product._id}_${Date.now()}`,
+        notes: {
+          productId: product._id.toString(),
+          sellerId,
+          type: 'product_listing',
+        },
+      });
+      razorpayOrderId = order.id;
+    } else {
+      razorpayOrderId = `order_demo_${Date.now()}`;
+    }
+
+    product.payment.razorpayOrderId = razorpayOrderId;
+    product.payment.amount = LISTING_FEE;
     await product.save();
 
-    return NextResponse.json(
-      {
-        success: true,
-        productId: product._id,
-        razorpayOrderId: razorpayOrder.id,
-        amount: razorpayOrder.amount,
-        currency: razorpayOrder.currency,
-        commission: commission,
-        key: process.env.RAZORPAY_KEY_ID || 'rzp_test_DEMO_KEY',
-      },
-      { status: 200 }
-    );
+    return NextResponse.json({
+      success: true,
+      productId: product._id,
+      razorpayOrderId,
+      amount: amountInPaise,
+      currency: 'INR',
+      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_YOUR_KEY_ID',
+      productTitle: product.title,
+      listingFee: LISTING_FEE,
+    });
   } catch (error) {
-    console.error('Product commission payment error:', error);
-    return NextResponse.json(
-      { error: 'Failed to create payment order' },
-      { status: 500 }
-    );
+    console.error('Product listing payment error:', error);
+    return NextResponse.json({ error: 'Failed to create payment order' }, { status: 500 });
   }
 }

@@ -1,343 +1,413 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
-import { Search, ShoppingCart, Store, TrendingUp, MapPin, Star, ArrowRight, Loader2, Plus, Tag } from 'lucide-react';
+import { Search, Star, ArrowRight, Loader2, Plus, ChevronRight, Sparkles, Shield, Zap, Phone } from 'lucide-react';
 
-const SHOP_CATEGORIES = [
-  { id: 1, name: 'Fashion', icon: '👕', count: 234 },
-  { id: 2, name: 'Electronics', icon: '📱', count: 456 },
-  { id: 3, name: 'Home', icon: '🏠', count: 178 },
-  { id: 4, name: 'Beauty', icon: '💄', count: 321 },
-  { id: 5, name: 'Sports', icon: '⚽', count: 145 },
-  { id: 6, name: 'Books', icon: '📚', count: 89 },
-  { id: 7, name: 'Food', icon: '🍔', count: 67 },
-  { id: 8, name: 'Services', icon: '🔧', count: 234 },
+const SERVICE_CATEGORIES = [
+  { id: 1,  name: 'Event Planner',   icon: '🎊', color: '#f472b6' },
+  { id: 2,  name: 'Hospitality',     icon: '✈️', color: '#60a5fa' },
+  { id: 3,  name: 'Pharmacy',        icon: '💊', color: '#34d399' },
+  { id: 4,  name: 'Hospitals',       icon: '🏥', color: '#f87171' },
+  { id: 5,  name: 'Gym & Fitness',   icon: '💪', color: '#fb923c' },
+  { id: 6,  name: 'Farmhouse',       icon: '🌾', color: '#a3e635' },
+  { id: 7,  name: 'Hotel Bookings',  icon: '🏨', color: '#818cf8' },
+  { id: 8,  name: 'Corporate',       icon: '💼', color: '#94a3b8' },
+  { id: 9,  name: 'Sports',          icon: '⚽', color: '#fbbf24' },
+  { id: 10, name: 'Beauty',          icon: '💄', color: '#e879f9' },
+  { id: 11, name: 'Food',            icon: '🍔', color: '#fb923c' },
+  { id: 12, name: 'Dentists',        icon: '🦷', color: '#2dd4bf' },
+  { id: 13, name: 'Driving Schools', icon: '🚗', color: '#60a5fa' },
+  { id: 14, name: 'PG & Rentals',    icon: '🏠', color: '#c084fc' },
 ];
 
-const BANNER_IMAGES = [
-  { id: 1, text: 'Big Sale', color: 'from-orange-500 to-red-500' },
-  { id: 2, text: 'New Arrivals', color: 'from-blue-500 to-purple-500' },
-  { id: 3, text: 'Free Delivery', color: 'from-green-500 to-teal-500' },
+const FEATURES = [
+  { icon: <Shield className="w-5 h-5" />, title: 'Verified',      desc: 'All providers verified' },
+  { icon: <Zap className="w-5 h-5" />,    title: '2 Free',        desc: 'First 2 listings free' },
+  { icon: <Sparkles className="w-5 h-5" />, title: '14 Categories', desc: 'Any service you need' },
 ];
+
+const BG    = '#0a1628';
+const SURF  = '#0f2040';
+const SURF2 = '#162a52';
+const PRI   = '#3b82f6';
+const PRI2  = '#60a5fa';
+const ACC   = '#2ED47A';
+const T1    = '#e2e8f0';
+const T2    = '#94a3b8';
+const T3    = '#64748b';
+const BOR   = '#1e3a5f';
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `${r},${g},${b}`;
+}
 
 export default function Home() {
   const { user } = useAuth();
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('shops');
-  const [shops, setShops] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery]       = useState('');
+  const [activeTab, setActiveTab]           = useState('services');
+  const [shops, setShops]                   = useState([]);
+  const [products, setProducts]             = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
-  useEffect(() => {
-    fetchHomeData();
-  }, []);
-
-  const fetchHomeData = async () => {
+  const fetchHomeData = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/home?type=all');
-      if (response.ok) {
-        const data = await response.json();
+      const url = selectedCategory
+        ? `/api/home?type=all&category=${encodeURIComponent(selectedCategory)}`
+        : '/api/home?type=all';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
         setShops(data.shops || []);
         setProducts(data.products || []);
       }
-    } catch (error) {
-      console.error('Error fetching home data:', error);
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCategory]);
+
+  // Fetch on mount and whenever category changes
+  useEffect(() => { fetchHomeData(); }, [fetchHomeData]);
+
+  // Refresh when the page regains focus (e.g. user returns from /sell)
+  useEffect(() => {
+    const onFocus = () => fetchHomeData();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [fetchHomeData]);
 
   const handleSearch = (e) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      router.push(`/browse?search=${encodeURIComponent(searchQuery)}`);
-    }
+    if (searchQuery.trim()) router.push('/browse?search=' + encodeURIComponent(searchQuery));
   };
 
+  const toggleCategory = (name) => {
+    setSelectedCategory(prev => prev === name ? null : name);
+  };
+
+  const catIcon = (name) =>
+    SERVICE_CATEGORIES.find(c => c.name === name)?.icon || '🏢';
+
   return (
-    <main className="min-h-screen bg-gray-50">
-      {/* Mobile App Like Header */}
-      <header className="sticky top-0 z-40 bg-white shadow-sm">
-        <div className="max-w-md mx-auto px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-1.5 flex-shrink-0">
-              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
-                <Store className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-800">Zubika</span>
-            </Link>
+    <main className="min-h-screen pb-24" style={{ background: BG }}>
 
-            {/* Search Bar */}
-            <form onSubmit={handleSearch} className="flex-1">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-gray-100 rounded-full text-sm text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                />
-                <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500">
-                  <Search className="w-4 h-4" />
-                </button>
-              </div>
-            </form>
+      {/* ── Header ── */}
+      <header className="sticky top-0 z-40"
+        style={{ background: 'rgba(10,22,40,0.97)', backdropFilter: 'blur(16px)', borderBottom: '1px solid ' + BOR, boxShadow: '0 2px 20px rgba(0,0,0,0.4)' }}>
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <Link href="/" className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-white text-lg shadow-md"
+              style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)' }}>Z</div>
+            <div>
+              <span className="text-lg font-bold" style={{ color: PRI2 }}>Zubika</span>
+              <div className="text-[9px] font-semibold leading-none" style={{ color: ACC }}>SMART MARKETPLACE</div>
+            </div>
+          </Link>
 
-            {/* Cart Icon */}
-            <Link href="/cart" className="relative p-1.5 text-gray-700">
-              <ShoppingCart className="w-5 h-5" />
+          <form onSubmit={handleSearch} className="flex-1 max-w-xs">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl border"
+              style={{ background: SURF2, borderColor: BOR }}>
+              <Search className="w-4 h-4 flex-shrink-0" style={{ color: T3 }} />
+              <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search services..." className="flex-1 bg-transparent text-sm outline-none min-w-0"
+                style={{ color: T1 }} />
+            </div>
+          </form>
+
+          {user ? (
+            <Link href="/profile"
+              className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-sm shadow-md flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)' }}>
+              {user.name?.charAt(0)?.toUpperCase() || 'U'}
             </Link>
-          </div>
+          ) : (
+            <Link href="/auth/login"
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white flex-shrink-0"
+              style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)' }}>
+              Login
+            </Link>
+          )}
         </div>
       </header>
 
-      {/* Banner Carousel */}
-      <section className="max-w-md mx-auto px-4 py-3">
-        <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-xl p-4 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold mb-1">Start Selling Today!</h2>
-              <p className="text-xs opacity-90 mb-2">List your shop or products in minutes</p>
-              <Link href="/auth/register" className="inline-flex items-center gap-1 bg-white text-orange-600 px-3 py-1.5 rounded-full text-xs font-semibold">
-                <Plus className="w-3 h-3" />
-                Sell Now
+      {/* ── Hero Banner ── */}
+      <section className="max-w-2xl mx-auto px-4 pt-5 pb-2">
+        <div className="rounded-2xl p-5 relative overflow-hidden"
+          style={{ background: 'linear-gradient(135deg, #0d2a5e 0%, #1d4ed8 60%, #0f5a3a 100%)', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', border: '1px solid ' + BOR }}>
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mb-3"
+              style={{ background: 'rgba(46,212,122,0.15)', color: ACC, border: '1px solid rgba(46,212,122,0.3)' }}>
+              <Sparkles className="w-3 h-3" /> India's Smart Service Platform
+            </div>
+            <h1 className="text-2xl font-bold text-white mb-1">Find Any Service,<br />Anywhere in India</h1>
+            <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.65)' }}>
+              14 categories · Verified providers · Instant connect
+            </p>
+            <div className="flex gap-2">
+              <Link href={user ? '/sell' : '/auth/register'}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
+                style={{ background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                List Free →
+              </Link>
+              <Link href="/browse"
+                className="px-4 py-2 rounded-xl text-sm font-semibold"
+                style={{ background: ACC, color: '#0a1628' }}>
+                Browse Services
               </Link>
             </div>
-            <div className="text-5xl">🛍️</div>
           </div>
+          <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full opacity-10" style={{ background: ACC }} />
+          <div className="absolute -right-4 -bottom-6 w-20 h-20 rounded-full opacity-10" style={{ background: PRI2 }} />
         </div>
       </section>
 
-      {/* Quick Actions - Mobile App Style */}
-      <section className="max-w-md mx-auto px-4 py-2">
-        <div className="flex gap-2">
-          {user ? (
-            <>
-              <Link href="/sell" className="flex-1 flex items-center justify-center gap-1.5 bg-orange-100 text-orange-700 py-2.5 rounded-lg text-sm font-medium">
-                <Store className="w-4 h-4" />
-                My Shop
-              </Link>
-              <Link href="/sell" className="flex-1 flex items-center justify-center gap-1.5 bg-green-100 text-green-700 py-2.5 rounded-lg text-sm font-medium">
-                <Plus className="w-4 h-4" />
-                Add Product
-              </Link>
-            </>
-          ) : (
-            <>
-              <Link href="/auth/login" className="flex-1 flex items-center justify-center gap-1.5 bg-orange-100 text-orange-700 py-2.5 rounded-lg text-sm font-medium">
-                Sign In
-              </Link>
-              <Link href="/auth/register" className="flex-1 flex items-center justify-center gap-1.5 bg-green-100 text-green-700 py-2.5 rounded-lg text-sm font-medium">
-                <Plus className="w-4 h-4" />
-                Register
-              </Link>
-            </>
-          )}
-        </div>
-      </section>
-
-      {/* Shop by Category - Mobile App Style */}
-      <section className="max-w-md mx-auto px-4 py-3">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-gray-800">Categories</h2>
-          <Link href="/browse" className="text-xs text-orange-600 font-medium flex items-center gap-0.5">
-            View All <ArrowRight className="w-3 h-3" />
-          </Link>
-        </div>
-        <div className="grid grid-cols-4 gap-2">
-          {SHOP_CATEGORIES.slice(0, 8).map((cat) => (
-            <Link
-              key={cat.id}
-              href={`/browse?category=${cat.name.toLowerCase()}`}
-              className="flex flex-col items-center justify-center p-2 bg-white rounded-lg shadow-sm hover:shadow-md transition"
-            >
-              <span className="text-2xl mb-1">{cat.icon}</span>
-              <span className="text-xs font-medium text-gray-700 truncate w-full text-center">{cat.name}</span>
-            </Link>
+      {/* ── Feature Pills ── */}
+      <section className="max-w-2xl mx-auto px-4 py-3">
+        <div className="grid grid-cols-3 gap-2">
+          {FEATURES.map((f, i) => (
+            <div key={i} className="rounded-xl p-3 text-center hover-lift"
+              style={{ background: SURF, border: '1px solid ' + BOR, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center mx-auto mb-1.5"
+                style={{ background: 'rgba(59,130,246,0.15)', color: PRI2 }}>
+                {f.icon}
+              </div>
+              <p className="text-xs font-semibold" style={{ color: T1 }}>{f.title}</p>
+              <p className="text-[10px]" style={{ color: T3 }}>{f.desc}</p>
+            </div>
           ))}
         </div>
       </section>
 
-      {/* Tabs - Mobile App Style */}
-      <section className="max-w-md mx-auto px-4 py-2">
-        <div className="flex bg-white rounded-lg p-1 shadow-sm">
-          <button
-            onClick={() => setActiveTab('shops')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
-              activeTab === 'shops' ? 'bg-orange-500 text-white' : 'text-gray-600'
-            }`}
-          >
-            🏪 Shops
-          </button>
-          <button
-            onClick={() => setActiveTab('products')}
-            className={`flex-1 py-2 text-sm font-medium rounded-md transition ${
-              activeTab === 'products' ? 'bg-orange-500 text-white' : 'text-gray-600'
-            }`}
-          >
-            📦 Products
-          </button>
+      {/* ── Service Categories ── */}
+      <section className="max-w-2xl mx-auto px-4 py-3">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-bold" style={{ color: T1 }}>Browse by Category</h2>
+          {selectedCategory && (
+            <button onClick={() => setSelectedCategory(null)} className="text-xs font-semibold px-2 py-1 rounded-lg"
+              style={{ color: PRI2, background: 'rgba(59,130,246,0.1)' }}>
+              Clear filter
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-4 gap-2">
+          {SERVICE_CATEGORIES.map(cat => (
+            <button key={cat.id} onClick={() => toggleCategory(cat.name)}
+              className="rounded-xl p-2.5 text-center transition-all hover-lift"
+              style={{
+                background: selectedCategory === cat.name
+                  ? `rgba(${hexToRgb(cat.color)},0.15)`
+                  : SURF,
+                border: selectedCategory === cat.name
+                  ? '2px solid ' + cat.color
+                  : '1px solid ' + BOR,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+              }}>
+              <div className="text-2xl mb-1">{cat.icon}</div>
+              <p className="text-[9px] font-semibold leading-tight"
+                style={{ color: selectedCategory === cat.name ? cat.color : T2 }}>
+                {cat.name}
+              </p>
+            </button>
+          ))}
         </div>
       </section>
 
-      {/* Content - Mobile App Style */}
-      <section className="max-w-md mx-auto px-4 py-3">
-        {/* Loading State */}
-        {loading && (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
+      {/* ── Listings ── */}
+      <section className="max-w-2xl mx-auto px-4 py-3">
+
+        {/* Tab bar */}
+        <div className="flex gap-2 mb-4">
+          {['services', 'products'].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className="px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+              style={activeTab === tab
+                ? { background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', color: '#fff', boxShadow: '0 4px 12px rgba(59,130,246,0.4)' }
+                : { background: SURF, color: T2, border: '1px solid ' + BOR }
+              }>
+              {tab === 'services'
+                ? `🏢 Services${selectedCategory ? '' : ''}`
+                : `📦 Products`}
+            </button>
+          ))}
+          {/* Quick add button */}
+          <Link href={user ? '/sell' : '/auth/register'}
+            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', boxShadow: '0 4px 12px rgba(59,130,246,0.3)' }}>
+            <Plus className="w-3.5 h-3.5" />
+            Add
+          </Link>
+        </div>
+
+        {selectedCategory && (
+          <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)' }}>
+            <span className="text-lg">{catIcon(selectedCategory)}</span>
+            <span className="text-sm font-semibold" style={{ color: PRI2 }}>{selectedCategory}</span>
+            <span className="text-xs ml-1" style={{ color: T3 }}>— filtered</span>
           </div>
         )}
 
-        {/* Featured Shops */}
-        {!loading && activeTab === 'shops' && (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Loader2 className="w-8 h-8 animate-spin" style={{ color: PRI }} />
+            <p className="text-sm" style={{ color: T3 }}>Loading listings…</p>
+          </div>
+        ) : (
           <>
-            {shops.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
-                {shops.slice(0, 6).map((shop) => (
-                  <Link
-                    key={shop.id}
-                    href={`/shops/${shop.id}`}
-                    className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition"
-                  >
-                    <div className="h-28 bg-gray-100 relative">
-                      {shop.images && shop.images.length > 0 ? (
-                        <Image
-                          src={shop.images[0]}
-                          alt={shop.shopName}
-                          fill
-                          className="object-cover"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-4xl">🏪</div>
-                      )}
-                    </div>
-                    <div className="p-2">
-                      <h3 className="font-semibold text-gray-800 text-sm line-clamp-1">{shop.shopName}</h3>
-                      <p className="text-xs text-gray-500 mb-1">{shop.category}</p>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-0.5">
-                          <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                          <span className="text-xs font-medium text-gray-700">{shop.rating || 'New'}</span>
+            {/* ── Services Tab ── */}
+            {activeTab === 'services' && (
+              <>
+                {shops.length > 0 ? (
+                  <div className="space-y-3">
+                    {shops.map(shop => (
+                      <Link key={shop._id || shop.id} href={'/shops/' + (shop._id || shop.id)}
+                        className="block rounded-2xl p-4 hover-lift transition-all"
+                        style={{ background: SURF, border: '1px solid ' + BOR, boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>
+                        <div className="flex items-start gap-3">
+                          <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+                            style={{ background: SURF2 }}>
+                            {catIcon(shop.category)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                              <h3 className="font-semibold text-sm truncate" style={{ color: T1 }}>{shop.shopName}</h3>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0"
+                                style={{ background: 'rgba(46,212,122,0.15)', color: ACC }}>
+                                ✓ Live
+                              </span>
+                            </div>
+                            <p className="text-xs mb-1" style={{ color: PRI2 }}>{shop.category}</p>
+                            <p className="text-xs line-clamp-2" style={{ color: T3 }}>{shop.description}</p>
+                            <div className="flex items-center gap-3 mt-2 flex-wrap">
+                              <span className="text-xs" style={{ color: T3 }}>
+                                📍 {shop.location?.city}, {shop.location?.state}
+                              </span>
+                              {shop.rating > 0 && (
+                                <span className="flex items-center gap-0.5 text-xs" style={{ color: T3 }}>
+                                  <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{shop.rating}
+                                </span>
+                              )}
+                              {shop.mobile && (
+                                <a href={`tel:${shop.mobile}`} onClick={e => e.stopPropagation()}
+                                  className="flex items-center gap-0.5 text-xs font-semibold"
+                                  style={{ color: ACC }}>
+                                  <Phone className="w-3 h-3" /> Call
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: T3 }} />
                         </div>
-                        <div className="flex items-center gap-0.5 text-xs text-gray-500">
-                          <MapPin className="w-2.5 h-2.5" />
-                          {shop.location?.city}
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white rounded-lg p-6 text-center shadow-sm">
-                <Store size={40} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500 text-sm mb-3">No shops yet</p>
-                <Link href="/auth/register" className="inline-flex items-center gap-1 text-orange-600 text-sm font-medium">
-                  <Plus className="w-4 h-4" />
-                  Create Your Shop
-                </Link>
-              </div>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    emoji="🏢"
+                    title={selectedCategory ? `No ${selectedCategory} services yet` : 'No services listed yet'}
+                    subtitle={selectedCategory ? 'Be the first to list in this category!' : 'Be the first to list your service!'}
+                    href={user ? '/sell' : '/auth/register'}
+                    btnLabel="List Your Service Free"
+                  />
+                )}
+              </>
             )}
-          </>
-        )}
 
-        {/* Trending Products */}
-        {!loading && activeTab === 'products' && (
-          <>
-            {products.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
-                {products.slice(0, 6).map((product) => (
-                  <Link
-                    key={product.id}
-                    href={`/product/${product.id}`}
-                    className="bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition"
-                  >
-                    <div className="h-28 bg-gray-100 relative">
-                      {product.images && product.images.length > 0 ? (
-                        <Image
-                          src={product.images[0]}
-                          alt={product.title}
-                          fill
-                          className="object-cover"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-4xl">📦</div>
-                      )}
-                    </div>
-                    <div className="p-2">
-                      <h3 className="font-semibold text-gray-800 text-sm line-clamp-2 mb-1">{product.title}</h3>
-                      <p className="text-xs text-gray-500">{product.category}</p>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="font-bold text-orange-600">₹{product.price}</span>
-                        <div className="flex items-center gap-0.5">
-                          <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                          <span className="text-xs text-gray-600">{product.rating || 'New'}</span>
+            {/* ── Products Tab ── */}
+            {activeTab === 'products' && (
+              <>
+                {products.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {products.map(product => (
+                      <Link key={product._id || product.id} href={'/product/' + (product._id || product.id)}
+                        className="rounded-2xl overflow-hidden hover-lift"
+                        style={{ background: SURF, border: '1px solid ' + BOR }}>
+                        <div className="h-28 relative" style={{ background: SURF2 }}>
+                          {product.images?.length > 0 ? (
+                            <Image src={product.images[0]} alt={product.title} fill className="object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-4xl">
+                              {catIcon(product.category)}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-white rounded-lg p-6 text-center shadow-sm">
-                <TrendingUp size={40} className="mx-auto text-gray-300 mb-3" />
-                <p className="text-gray-500 text-sm mb-3">No products yet</p>
-                <Link href="/auth/register" className="inline-flex items-center gap-1 text-orange-600 text-sm font-medium">
-                  <Plus className="w-4 h-4" />
-                  Add Your Product
-                </Link>
-              </div>
+                        <div className="p-3">
+                          <h3 className="font-semibold text-sm line-clamp-2 mb-1" style={{ color: T1 }}>{product.title}</h3>
+                          <p className="text-xs mb-1" style={{ color: PRI2 }}>{product.category}</p>
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-sm" style={{ color: ACC }}>₹{product.price}</span>
+                            {product.rating > 0 && (
+                              <span className="flex items-center gap-0.5 text-xs" style={{ color: T3 }}>
+                                <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />{product.rating}
+                              </span>
+                            )}
+                          </div>
+                          {product.location?.city && (
+                            <p className="text-[10px] mt-1 truncate" style={{ color: T3 }}>
+                              📍 {product.location.city}
+                            </p>
+                          )}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    emoji="📦"
+                    title={selectedCategory ? `No ${selectedCategory} products yet` : 'No products listed yet'}
+                    subtitle={selectedCategory ? 'Be the first to list in this category!' : 'First 2 listings are FREE!'}
+                    href={user ? '/sell' : '/auth/register'}
+                    btnLabel="Add Your Product"
+                  />
+                )}
+              </>
             )}
           </>
         )}
       </section>
 
-      {/* Bottom Navigation - Mobile App Style */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-2 py-1.5 z-50">
-        <div className="max-w-md mx-auto flex items-center justify-between px-4">
-          <Link href="/" className="flex flex-col items-center gap-0.5 p-1.5 text-orange-600">
-            <Store className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Home</span>
-          </Link>
-          <Link href="/browse" className="flex flex-col items-center gap-0.5 p-1.5 text-gray-500">
-            <Search className="w-5 h-5" />
-            <span className="text-[10px] font-medium">Browse</span>
-          </Link>
-          <Link href="/sell" className="flex flex-col items-center gap-0.5 -mt-6">
-            <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center shadow-lg border-4 border-white">
-              <Plus className="w-6 h-6 text-white" />
-            </div>
-            <span className="text-[10px] font-medium text-gray-600">Sell</span>
-          </Link>
-          <Link href={user ? "/profile" : "/auth/login"} className="flex flex-col items-center gap-0.5 p-1.5 text-gray-500">
-            {user ? (
-              <div className="w-5 h-5 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold text-xs">
-                {user.name?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-            ) : (
-              <Tag className="w-5 h-5" />
-            )}
-            <span className="text-[10px] font-medium">{user ? 'Account' : 'Login'}</span>
+      {/* ── CTA Banner ── */}
+      <section className="max-w-2xl mx-auto px-4 py-3 pb-6">
+        <div className="rounded-2xl p-5 flex items-center gap-4"
+          style={{ background: 'linear-gradient(135deg, rgba(46,212,122,0.1), rgba(59,130,246,0.1))', border: '1px solid rgba(46,212,122,0.25)' }}>
+          <div className="text-3xl">🚀</div>
+          <div className="flex-1">
+            <p className="font-bold text-sm" style={{ color: ACC }}>List Your Service — First 2 FREE!</p>
+            <p className="text-xs" style={{ color: T2 }}>Join thousands of service providers on Zubika</p>
+          </div>
+          <Link href={user ? '/sell' : '/auth/register'}
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-white flex-shrink-0"
+            style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)' }}>
+            Start Now
           </Link>
         </div>
-      </nav>
-
-      {/* Bottom Padding */}
-      <div className="h-20"></div>
+      </section>
     </main>
+  );
+}
+
+function EmptyState({ emoji, title, subtitle, href, btnLabel }) {
+  return (
+    <div className="rounded-2xl p-10 text-center" style={{ background: '#0f2040', border: '1px solid #1e3a5f' }}>
+      <div className="text-5xl mb-3">{emoji}</div>
+      <p className="font-semibold mb-1" style={{ color: '#e2e8f0' }}>{title}</p>
+      <p className="text-sm mb-4" style={{ color: '#64748b' }}>{subtitle}</p>
+      <Link href={href}
+        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
+        style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)' }}>
+        <Plus className="w-4 h-4" /> {btnLabel}
+      </Link>
+    </div>
   );
 }

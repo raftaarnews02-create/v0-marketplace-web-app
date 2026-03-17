@@ -8,38 +8,59 @@ export async function GET(req) {
     await connectDB();
 
     const { searchParams } = new URL(req.url);
-    const type = searchParams.get('type'); // 'shops', 'products', or 'all'
+    const type     = searchParams.get('type');     // 'shops' | 'products' | 'all'
+    const category = searchParams.get('category'); // optional category filter
+    const page     = parseInt(searchParams.get('page') || '1');
+    const limit    = parseInt(searchParams.get('limit') || '50');
+    const skip     = (page - 1) * limit;
 
-    let shops = [];
+    // A listing is visible if:
+    //   • it's a free listing that was auto-approved, OR
+    //   • the seller paid and the listing was approved
+    // Either way: status === 'active' && moderation.status === 'approved'
+    const baseShopFilter = {
+      status: 'active',
+      isActive: true,
+      'moderation.status': 'approved',
+    };
+
+    const baseProductFilter = {
+      status: 'active',
+      'moderation.status': 'approved',
+    };
+
+    if (category) {
+      baseShopFilter.category    = category;
+      baseProductFilter.category = category;
+    }
+
+    let shops    = [];
     let products = [];
 
     if (type === 'shops' || type === 'all') {
-      // Fetch approved and active shops
-      shops = await Shop.find({
-        'moderation.status': 'approved',
-        status: 'active',
-        isActive: true
-      })
+      shops = await Shop.find(baseShopFilter)
         .populate('seller', 'name phone')
         .sort({ createdAt: -1 })
-        .limit(8);
+        .skip(skip)
+        .limit(limit)
+        .lean();
     }
 
     if (type === 'products' || type === 'all') {
-      // Fetch approved and active products
-      products = await Product.find({
-        'moderation.status': 'approved',
-        status: 'active',
-      })
+      products = await Product.find(baseProductFilter)
         .populate('vendor', 'name phone')
         .sort({ createdAt: -1 })
-        .limit(12);
+        .skip(skip)
+        .limit(limit)
+        .lean();
     }
 
     return NextResponse.json(
       {
         success: true,
+        page,
         shops: shops.map(shop => ({
+          _id: shop._id,
           id: shop._id,
           shopName: shop.shopName,
           category: shop.category,
@@ -51,11 +72,11 @@ export async function GET(req) {
           images: shop.images,
           rating: shop.rating,
           ratingCount: shop.ratingCount,
-          totalProducts: shop.totalProducts,
           seller: shop.seller,
           createdAt: shop.createdAt,
         })),
         products: products.map(product => ({
+          _id: product._id,
           id: product._id,
           title: product.title,
           description: product.description,

@@ -26,22 +26,12 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }, []);
 
-  const login = async (phone, otp) => {
-    const response = await fetch('/api/auth/verify-otp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, otp }),
-    });
-
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error);
-
-    setToken(data.token);
-    setUser(data.user);
-    localStorage.setItem('token', data.token);
-    localStorage.setItem('user', JSON.stringify(data.user));
-
-    return data;
+  // Called with (token, user) after the page already verified OTP
+  const login = (token, user) => {
+    setToken(token);
+    setUser(user);
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
   };
 
   const register = async (name, userType, phone, otp) => {

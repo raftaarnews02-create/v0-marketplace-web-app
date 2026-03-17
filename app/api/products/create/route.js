@@ -2,16 +2,17 @@ import { NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { connectDB } from '@/lib/mongodb';
 import Product from '@/lib/models/Product';
+import Shop from '@/lib/models/Shop';
 import User from '@/lib/models/User';
+
+const FREE_LISTING_LIMIT = 2;
+const LISTING_FEE = 99;
 
 export async function POST(req) {
   try {
     const token = req.headers.get('authorization')?.split(' ')[1];
     if (!token) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
@@ -28,28 +29,35 @@ export async function POST(req) {
       discount,
       location,
       tags,
+      contactPerson,
+      mobile,
     } = await req.json();
 
-    // Validation
     if (!title || !description || !price || !category) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
     await connectDB();
 
-    // Check if user is a vendor
     const user = await User.findById(vendorId);
-    if (!user || user.userType !== 'vendor') {
-      return NextResponse.json(
-        { error: 'You must be a registered vendor to add products' },
-        { status: 403 }
-      );
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    // Create product
+    // Auto-upgrade user to vendor if they're listing a product
+    if (user.userType !== 'vendor' && user.userType !== 'admin') {
+      user.userType = 'vendor';
+      await user.save();
+    }
+
+    // Count total listings (shops + products) by this user
+    const shopCount = await Shop.countDocuments({ seller: vendorId });
+    const productCount = await Product.countDocuments({ vendor: vendorId });
+    const totalListings = shopCount + productCount;
+
+    // Determine if this listing is free
+    const isFree = totalListings < FREE_LISTING_LIMIT;
+
     const product = new Product({
       title,
       description,
@@ -62,14 +70,19 @@ export async function POST(req) {
       discount: discount || 0,
       location,
       tags,
-      status: 'pending',
+      contactPerson,
+      mobile,
+      // Free listings go live immediately; paid listings wait for payment
+      status: isFree ? 'active' : 'pending',
       moderation: {
-        status: 'pending',
+        // Free listings are auto-approved so they appear on home page immediately
+        status: isFree ? 'approved' : 'pending',
       },
       payment: {
-        amount: 0,
+        amount: isFree ? 0 : LISTING_FEE,
         commission: 0,
-        status: 'pending',
+        status: isFree ? 'free' : 'pending',
+        isFree,
       },
     });
 
@@ -78,22 +91,25 @@ export async function POST(req) {
     return NextResponse.json(
       {
         success: true,
-        message: 'Product created successfully. Please complete the commission payment to submit for review.',
+        isFree,
+        requiresPayment: !isFree,
+        message: isFree
+          ? 'Product listed successfully! It is now live on Zubika.'
+          : `Pay Rs.${LISTING_FEE} to activate your listing.`,
         product: {
+          _id: product._id,
           id: product._id,
           title: product.title,
           price: product.price,
           status: product.status,
-          moderationStatus: product.moderation.status,
+          isFree,
+          payment: { status: product.payment.status, amount: product.payment.amount },
         },
       },
       { status: 201 }
     );
   } catch (error) {
-    console.error('Create product error:', error);
-    return NextResponse.json(
-      { error: 'Failed to create product' },
-      { status: 500 }
-    );
+    console.error('Create product/listing error:', error);
+    return NextResponse.json({ error: 'Failed to create listing' }, { status: 500 });
   }
 }

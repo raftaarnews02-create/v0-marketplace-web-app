@@ -1,862 +1,489 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { Plus, Edit2, Trash2, Package, Store, ShoppingBag, ArrowRight, CreditCard, CheckCircle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Store, ShoppingBag, CreditCard, CheckCircle, Loader2, ArrowLeft, Tag, AlertCircle, X } from 'lucide-react';
+import { ServiceForm } from '@/components/ServiceForm';
+import { ProductForm } from '@/components/ProductForm';
 
-const SHOP_CATEGORIES = [
-  { value: 'retail', label: 'Retail Store' },
-  { value: 'wholesale', label: 'Wholesale' },
-  { value: 'manufacturing', label: 'Manufacturing' },
-  { value: 'services', label: 'Services' },
-  { value: 'electronics', label: 'Electronics' },
-  { value: 'fashion', label: 'Fashion & Clothing' },
-  { value: 'food', label: 'Food & Beverages' },
-  { value: 'healthcare', label: 'Healthcare' },
-  { value: 'education', label: 'Education' },
-  { value: 'other', label: 'Other' },
-];
+const FREE_LISTING_LIMIT = 2;
+const LISTING_FEE = 99;
 
-const PRODUCT_CATEGORIES = [
-  { value: 'electronics', label: 'Electronics' },
-  { value: 'fashion', label: 'Fashion' },
-  { value: 'home', label: 'Home & Living' },
-  { value: 'beauty', label: 'Beauty' },
-  { value: 'sports', label: 'Sports' },
-  { value: 'toys', label: 'Toys & Games' },
-  { value: 'books', label: 'Books' },
-  { value: 'automotive', label: 'Automotive' },
-  { value: 'food', label: 'Food & Drinks' },
-  { value: 'other', label: 'Other' },
-];
+function loadRazorpay() {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
-const COMMISSION_RATE = 0.05; // 5%
+const DEMO_KEY = 'rzp_test_YOUR_KEY_ID';
 
 export default function Sell() {
   const router = useRouter();
   const { user, token, loading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState('shops');
+  const [activeTab, setActiveTab] = useState('services');
   const [shops, setShops] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState(null);
   const [processingPayment, setProcessingPayment] = useState(null);
-  
-  // Form data states
-  const [shopFormData, setShopFormData] = useState({
-    shopName: '',
-    category: 'retail',
-    description: '',
+  const [toast, setToast] = useState(null);
+
+  const [svcForm, setSvcForm] = useState({
+    shopName: '', category: 'Event Planner', description: '',
     location: { city: '', state: '', pincode: '', fullAddress: '' },
-    contactPerson: '',
-    mobile: '',
-    whatsapp: '',
-    images: [],
-    documents: [],
+    contactPerson: '', mobile: '', whatsapp: '',
+    serviceDetails: {},
   });
 
-  const [productFormData, setProductFormData] = useState({
-    title: '',
-    description: '',
-    price: '',
-    category: 'electronics',
-    stock: '',
-    location: { city: '', state: '', pincode: '' },
-    images: [],
-    contactPerson: '',
-    mobile: '',
+  const [prdForm, setPrdForm] = useState({
+    title: '', description: '', price: '', category: 'Event Planner',
+    stock: '', location: { city: '', state: '', pincode: '' },
+    contactPerson: '', mobile: '',
   });
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/auth/login');
-    } else if (!authLoading && user && user.userType !== 'vendor') {
-      router.push('/');
-    }
-  }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (user && token && user.userType === 'vendor') {
-      fetchMyListings();
-    }
-  }, [user, token]);
-
-  const fetchMyListings = async () => {
-    try {
-      // Fetch shops - using myShops=true to get seller's own shops
-      const shopsResponse = await fetch('/api/shops?myShops=true', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const shopsData = await shopsResponse.json();
-      if (shopsData.success) {
-        setShops(shopsData.shops || []);
-      }
-
-      // Fetch products - using seller=true to get seller's own products
-      const productsResponse = await fetch('/api/products?seller=true', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const productsData = await productsResponse.json();
-      if (productsData.products) {
-        setProducts(productsData.products);
-      }
-    } catch (error) {
-      console.error('Error fetching listings:', error);
-    }
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
   };
 
-  const handleShopFormChange = (e) => {
+  const totalListings = shops.length + products.length;
+  const nextFree = totalListings < FREE_LISTING_LIMIT;
+
+  const fetchData = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const [sRes, pRes] = await Promise.all([
+        fetch('/api/sellers', { headers: { Authorization: 'Bearer ' + token } }),
+        fetch('/api/products', { headers: { Authorization: 'Bearer ' + token } }),
+      ]);
+      if (sRes.ok) { const d = await sRes.json(); setShops(d.shops || []); }
+      if (pRes.ok) { const d = await pRes.json(); setProducts(d.products || []); }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [token]);
+
+  useEffect(() => {
+    if (!authLoading && !user) router.push('/auth/login');
+    else if (user) fetchData();
+  }, [authLoading, user, fetchData, router]);
+
+  /* ── onChange handlers ── */
+  const handleSvcChange = (e) => {
     const { name, value } = e.target;
     if (name.startsWith('location.')) {
-      const field = name.split('.')[1];
-      setShopFormData(prev => ({
-        ...prev,
-        location: { ...prev.location, [field]: value }
-      }));
+      const key = name.split('.')[1];
+      setSvcForm(p => ({ ...p, location: { ...p.location, [key]: value } }));
+    } else if (name.startsWith('serviceDetails.')) {
+      const key = name.split('.')[1];
+      setSvcForm(p => ({ ...p, serviceDetails: { ...p.serviceDetails, [key]: value } }));
     } else {
-      setShopFormData(prev => ({ ...prev, [name]: value }));
+      setSvcForm(p => ({ ...p, [name]: value }));
     }
   };
 
-  const handleProductFormChange = (e) => {
+  const handlePrdChange = (e) => {
     const { name, value } = e.target;
     if (name.startsWith('location.')) {
-      const field = name.split('.')[1];
-      setProductFormData(prev => ({
-        ...prev,
-        location: { ...prev.location, [field]: value }
-      }));
+      const key = name.split('.')[1];
+      setPrdForm(p => ({ ...p, location: { ...p.location, [key]: value } }));
     } else {
-      setProductFormData(prev => ({ ...prev, [name]: value }));
+      setPrdForm(p => ({ ...p, [name]: value }));
     }
   };
 
-  const handleCreateShop = async (e) => {
+  /* ── Submit service ── */
+  const handleSvcSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      const response = await fetch('/api/shops/create', {
+      const res = await fetch('/api/shops/create', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(shopFormData),
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify(svcForm),
       });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'Failed to create listing', 'error'); return; }
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.error || 'Failed to create shop');
-        return;
-      }
-
-      alert('Shop created successfully! Please complete the listing fee payment of ₹100.');
-      setShowForm(false);
-      setFormType(null);
-      fetchMyListings();
-    } catch (error) {
-      console.error('Error creating shop:', error);
-      alert('Failed to create shop');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreateProduct = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/products/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          ...productFormData,
-          price: parseFloat(productFormData.price),
-          stock: parseInt(productFormData.stock) || 0,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        alert(data.error || 'Failed to create product');
-        return;
-      }
-
-      alert('Product created successfully! Please complete the commission payment.');
-      setShowForm(false);
-      setFormType(null);
-      fetchMyListings();
-    } catch (error) {
-      console.error('Error creating product:', error);
-      alert('Failed to create product');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePayment = async (type, item) => {
-    try {
-      setProcessingPayment(item._id);
-      
-      if (type === 'shop') {
-        // Create Razorpay order for shop listing fee
-        const response = await fetch('/api/payments/shop-listing', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ shopId: item._id }),
-        });
-
-        const data = await response.json();
-        
-        if (!response.ok) {
-          alert(data.error || 'Failed to initiate payment');
-          return;
-        }
-
-        // Simulate payment success (in production, integrate with Razorpay)
-        const verifyResponse = await fetch('/api/payments/shop-verify', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ 
-            shopId: item._id,
-            razorpayPaymentId: 'pay_' + Date.now(),
-            razorpayOrderId: data.razorpayOrderId,
-          }),
-        });
-
-        if (verifyResponse.ok) {
-          alert('Payment successful! Your shop is now under review for approval.');
-          fetchMyListings();
-        } else {
-          alert('Payment verification failed');
-        }
+      if (data.requiresPayment) {
+        await initiatePayment('service', data.shop);
       } else {
-        // Create Razorpay order for product commission
-        const response = await fetch('/api/payments/product-commission', {
+        showToast('Service listed successfully!');
+        setShowForm(false);
+        fetchData();
+      }
+    } catch (err) {
+      showToast('Something went wrong', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ── Submit product ── */
+  const handlePrdSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch('/api/products/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify(prdForm),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error || 'Failed to create listing', 'error'); return; }
+
+      if (data.requiresPayment) {
+        await initiatePayment('product', data.product);
+      } else {
+        showToast('Product listed successfully!');
+        setShowForm(false);
+        fetchData();
+      }
+    } catch (err) {
+      showToast('Something went wrong', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* ── Razorpay payment ── */
+  const initiatePayment = async (type, item) => {
+    setProcessingPayment(item._id);
+    try {
+      const endpoint = type === 'service' ? '/api/payments/shop-listing' : '/api/payments/product-commission';
+      const bodyKey = type === 'service' ? 'shopId' : 'productId';
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ [bodyKey]: item._id }),
+      });
+      const orderData = await res.json();
+      if (!res.ok) { showToast(orderData.error || 'Payment init failed', 'error'); return; }
+
+      const isDemo = orderData.key === DEMO_KEY || !orderData.key;
+
+      if (isDemo) {
+        // Demo mode — simulate payment
+        const verifyEndpoint = type === 'service' ? '/api/payments/shop-verify' : '/api/payments/product-verify';
+        const vRes = await fetch(verifyEndpoint, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ productId: item._id }),
-        });
-
-        const data = await response.json();
-        
-        if (!response.ok) {
-          alert(data.error || 'Failed to initiate payment');
-          return;
-        }
-
-        // Calculate commission
-        const commission = Math.round(item.price * COMMISSION_RATE);
-
-        // Simulate payment success (in production, integrate with Razorpay)
-        const verifyResponse = await fetch('/api/payments/product-verify', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ 
-            productId: item._id,
-            razorpayPaymentId: 'pay_' + Date.now(),
-            razorpayOrderId: data.razorpayOrderId,
-            commission: commission,
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({
+            [bodyKey]: item._id,
+            razorpay_order_id: orderData.razorpayOrderId,
+            razorpay_payment_id: 'pay_demo_' + Date.now(),
+            razorpay_signature: 'demo_signature',
           }),
         });
-
-        if (verifyResponse.ok) {
-          alert(`Payment successful! Commission of ₹${commission} paid. Your product is now under review.`);
-          fetchMyListings();
-        } else {
-          alert('Payment verification failed');
+        if (vRes.ok) {
+          showToast('Payment successful! (Demo mode)');
+          setShowForm(false);
+          fetchData();
         }
+        return;
       }
-    } catch (error) {
-      console.error('Payment error:', error);
-      alert('Payment failed');
+
+      const loaded = await loadRazorpay();
+      if (!loaded) { showToast('Razorpay failed to load', 'error'); return; }
+
+      const options = {
+        key: orderData.key,
+        amount: orderData.amount,
+        currency: orderData.currency || 'INR',
+        name: 'Zubika',
+        description: 'Listing Fee',
+        order_id: orderData.razorpayOrderId,
+        handler: async (response) => {
+          const verifyEndpoint = type === 'service' ? '/api/payments/shop-verify' : '/api/payments/product-verify';
+          const vRes = await fetch(verifyEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+            body: JSON.stringify({
+              [bodyKey]: item._id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            }),
+          });
+          if (vRes.ok) {
+            showToast('Payment successful! Listing is live.');
+            setShowForm(false);
+            fetchData();
+          } else {
+            showToast('Payment verification failed', 'error');
+          }
+        },
+        prefill: { name: user?.name || '', contact: user?.phone || '' },
+        theme: { color: '#1E4F7A' },
+      };
+      new window.Razorpay(options).open();
+    } catch (err) {
+      showToast('Payment error', 'error');
     } finally {
       setProcessingPayment(null);
     }
   };
 
-  const handleDeleteShop = async (shopId) => {
-    if (!window.confirm('Are you sure you want to delete this shop?')) return;
-
-    try {
-      const response = await fetch(`/api/shops/${shopId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        fetchMyListings();
-      }
-    } catch (error) {
-      console.error('Error deleting shop:', error);
-    }
+  const handleDeleteShop = async (id) => {
+    if (!confirm('Delete this service listing?')) return;
+    await fetch('/api/shops/' + id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
+    fetchData();
   };
 
-  const handleDeleteProduct = async (productId) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
-
-    try {
-      const response = await fetch(`/api/products/${productId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        fetchMyListings();
-      }
-    } catch (error) {
-      console.error('Error deleting product:', error);
-    }
+  const handleDeleteProduct = async (id) => {
+    if (!confirm('Delete this product?')) return;
+    await fetch('/api/products/' + id, { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } });
+    fetchData();
   };
 
   if (authLoading) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </main>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a1628' }}>
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#3b82f6' }} />
+      </div>
     );
   }
 
-  if (!user || user.userType !== 'vendor') {
-    return null;
-  }
-
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen pb-24" style={{ background: '#0a1628' }}>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold"
+          style={{ background: toast.type === 'error' ? 'rgba(239,68,68,0.15)' : 'rgba(46,212,122,0.15)', color: toast.type === 'error' ? '#f87171' : '#2ED47A', border: '1px solid ' + (toast.type === 'error' ? 'rgba(239,68,68,0.4)' : 'rgba(46,212,122,0.4)'), backdropFilter: 'blur(12px)' }}>
+          {toast.type === 'error' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+          {toast.msg}
+          <button onClick={() => setToast(null)}><X className="w-3.5 h-3.5" /></button>
+        </div>
+      )}
+
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900">My Dashboard</h1>
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-          >
-            <Plus size={20} />
-            Create Listing
+      <header className="sticky top-0 z-40" style={{ background: 'rgba(10,22,40,0.95)', backdropFilter: 'blur(16px)', borderBottom: '1px solid #1e3a5f', boxShadow: '0 2px 16px rgba(0,0,0,0.3)' }}>
+        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="p-1.5 rounded-lg" style={{ color: '#60a5fa' }}>
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-base font-bold" style={{ color: '#e2e8f0' }}>My Listings</h1>
+              <p className="text-xs" style={{ color: '#94a3b8' }}>{totalListings} listing{totalListings !== 1 ? 's' : ''} · {Math.max(0, FREE_LISTING_LIMIT - totalListings)} free remaining</p>
+            </div>
+          </div>
+          <button onClick={() => { setShowForm(true); setFormType(activeTab === 'services' ? 'service' : 'product'); }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold text-white"
+            style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', boxShadow: '0 4px 12px rgba(59,130,246,0.35)' }}>
+            <Plus className="w-4 h-4" />
+            {nextFree ? '🎉 Add Free' : 'Add (Rs.' + LISTING_FEE + ')'}
           </button>
         </div>
       </header>
 
-      {/* Create Listing Modal */}
-      {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">Create New Listing</h2>
-              <p className="text-gray-500 mt-1">Choose what you want to list</p>
+      {/* Free tier banner */}
+      {totalListings < FREE_LISTING_LIMIT && (
+        <div className="max-w-2xl mx-auto px-4 pt-4">
+          <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ background: 'rgba(46,212,122,0.08)', border: '1px solid rgba(46,212,122,0.3)' }}>
+            <CheckCircle className="w-5 h-5 flex-shrink-0" style={{ color: '#2ED47A' }} />
+            <div>
+              <p className="text-sm font-semibold" style={{ color: '#2ED47A' }}>
+                {FREE_LISTING_LIMIT - totalListings} free listing{FREE_LISTING_LIMIT - totalListings !== 1 ? 's' : ''} remaining!
+              </p>
+              <p className="text-xs" style={{ color: '#4ade80' }}>After {FREE_LISTING_LIMIT} listings, each costs Rs.{LISTING_FEE} via Razorpay</p>
             </div>
-            
-            {!formType ? (
-              <div className="p-6 space-y-4">
-                <button
-                  onClick={() => setFormType('shop')}
-                  className="w-full p-6 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition flex items-center gap-4 text-left"
-                >
-                  <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <Store className="w-7 h-7 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">List a Shop</h3>
-                    <p className="text-sm text-gray-500">Create a physical or online store</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-gray-400 ml-auto" />
-                </button>
-
-                <button
-                  onClick={() => setFormType('product')}
-                  className="w-full p-6 border-2 border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50 transition flex items-center gap-4 text-left"
-                >
-                  <div className="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center">
-                    <ShoppingBag className="w-7 h-7 text-green-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">List a Product</h3>
-                    <p className="text-sm text-gray-500">Sell individual products or services</p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-gray-400 ml-auto" />
-                </button>
-
-                <button
-                  onClick={() => setShowForm(false)}
-                  className="w-full py-3 text-gray-600 hover:text-gray-900 transition"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={formType === 'shop' ? handleCreateShop : handleCreateProduct} className="p-6 space-y-4">
-                <button
-                  type="button"
-                  onClick={() => setFormType(null)}
-                  className="text-sm text-gray-500 hover:text-gray-700 mb-2"
-                >
-                  ← Back to selection
-                </button>
-
-                {formType === 'shop' ? (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Shop Name *</label>
-                      <input
-                        type="text"
-                        name="shopName"
-                        value={shopFormData.shopName}
-                        onChange={handleShopFormChange}
-                        required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter shop name"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                      <select
-                        name="category"
-                        value={shopFormData.category}
-                        onChange={handleShopFormChange}
-                        required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        {SHOP_CATEGORIES.map(cat => (
-                          <option key={cat.value} value={cat.value}>{cat.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                      <textarea
-                        name="description"
-                        value={shopFormData.description}
-                        onChange={handleShopFormChange}
-                        required
-                        rows={3}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Describe your shop"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
-                        <input
-                          type="text"
-                          name="location.city"
-                          value={shopFormData.location.city}
-                          onChange={handleShopFormChange}
-                          required
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Mumbai"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
-                        <input
-                          type="text"
-                          name="location.state"
-                          value={shopFormData.location.state}
-                          onChange={handleShopFormChange}
-                          required
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Maharashtra"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Full Address</label>
-                      <input
-                        type="text"
-                        name="location.fullAddress"
-                        value={shopFormData.location.fullAddress}
-                        onChange={handleShopFormChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Complete address"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person *</label>
-                      <input
-                        type="text"
-                        name="contactPerson"
-                        value={shopFormData.contactPerson}
-                        onChange={handleShopFormChange}
-                        required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Owner name"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mobile *</label>
-                        <input
-                          type="tel"
-                          name="mobile"
-                          value={shopFormData.mobile}
-                          onChange={handleShopFormChange}
-                          required
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="9876543210"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">WhatsApp</label>
-                        <input
-                          type="tel"
-                          name="whatsapp"
-                          value={shopFormData.whatsapp}
-                          onChange={handleShopFormChange}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="9876543210"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-4 flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => { setShowForm(false); setFormType(null); }}
-                        className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {loading ? 'Creating...' : 'Create Shop (₹100)'}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Product Name *</label>
-                      <input
-                        type="text"
-                        name="title"
-                        value={productFormData.title}
-                        onChange={handleProductFormChange}
-                        required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        placeholder="Product name"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Price (₹) *</label>
-                        <input
-                          type="number"
-                          name="price"
-                          value={productFormData.price}
-                          onChange={handleProductFormChange}
-                          required
-                          min="0"
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          placeholder="999"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Stock *</label>
-                        <input
-                          type="number"
-                          name="stock"
-                          value={productFormData.stock}
-                          onChange={handleProductFormChange}
-                          required
-                          min="0"
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          placeholder="100"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
-                      <select
-                        name="category"
-                        value={productFormData.category}
-                        onChange={handleProductFormChange}
-                        required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      >
-                        {PRODUCT_CATEGORIES.map(cat => (
-                          <option key={cat.value} value={cat.value}>{cat.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                      <textarea
-                        name="description"
-                        value={productFormData.description}
-                        onChange={handleProductFormChange}
-                        required
-                        rows={3}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                        placeholder="Product description"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
-                        <input
-                          type="text"
-                          name="location.city"
-                          value={productFormData.location.city}
-                          onChange={handleProductFormChange}
-                          required
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          placeholder="Mumbai"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">State *</label>
-                        <input
-                          type="text"
-                          name="location.state"
-                          value={productFormData.location.state}
-                          onChange={handleProductFormChange}
-                          required
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          placeholder="Maharashtra"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
-                        <input
-                          type="text"
-                          name="contactPerson"
-                          value={productFormData.contactPerson}
-                          onChange={handleProductFormChange}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          placeholder="Contact name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mobile</label>
-                        <input
-                          type="tel"
-                          name="mobile"
-                          value={productFormData.mobile}
-                          onChange={handleProductFormChange}
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          placeholder="9876543210"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="pt-4 flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => { setShowForm(false); setFormType(null); }}
-                        className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                      >
-                        {loading ? 'Creating...' : 'Create Product'}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </form>
-            )}
           </div>
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setActiveTab('shops')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${activeTab === 'shops' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
-          >
-            My Shops ({shops.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('products')}
-            className={`px-4 py-2 rounded-lg font-medium transition ${activeTab === 'products' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
-          >
-            My Products ({products.length})
-          </button>
+      {/* Slide-in Form Panel */}
+      {showForm && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'rgba(0,0,0,0.75)' }}>
+          {/* Tap outside to dismiss */}
+          <div className="flex-1" onClick={() => setShowForm(false)} />
+
+          {/* Sheet — fills up to 92% of viewport; scrollable internally */}
+          <div className="rounded-t-3xl flex flex-col" style={{ background: '#0a1628', maxHeight: '92dvh', height: 'auto' }}>
+
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+              <div className="w-10 h-1 rounded-full" style={{ background: '#1e3a5f' }} />
+            </div>
+
+            {/* Form Header — sticky inside the sheet */}
+            <div className="flex items-center justify-between px-5 py-3 border-b flex-shrink-0" style={{ background: '#0f2040', borderColor: '#1e3a5f' }}>
+              <div>
+                <h2 className="font-bold text-base" style={{ color: '#e2e8f0' }}>
+                  {formType === 'service' ? 'List a Service' : 'List a Product'}
+                </h2>
+                <p className="text-xs font-semibold" style={{ color: nextFree ? '#2ED47A' : '#60a5fa' }}>
+                  {nextFree ? '🎉 FREE listing' : 'Rs.' + LISTING_FEE + ' via Razorpay'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setFormType(formType === 'service' ? 'product' : 'service')}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border"
+                  style={{ borderColor: '#1e3a5f', color: '#60a5fa', background: '#162a52' }}>
+                  Switch to {formType === 'service' ? 'Product' : 'Service'}
+                </button>
+                <button onClick={() => setShowForm(false)} className="p-1.5 rounded-lg" style={{ color: '#94a3b8' }}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable form body — pb-safe ensures buttons above iOS home bar */}
+            <div className="overflow-y-auto flex-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {formType === 'service' ? (
+                <ServiceForm svc={svcForm} onChange={handleSvcChange} onSubmit={handleSvcSubmit}
+                  onCancel={() => setShowForm(false)} loading={loading} nextFree={nextFree} LISTING_FEE={LISTING_FEE} />
+              ) : (
+                <ProductForm prd={prdForm} onChange={handlePrdChange} onSubmit={handlePrdSubmit}
+                  onCancel={() => setShowForm(false)} loading={loading} nextFree={nextFree} LISTING_FEE={LISTING_FEE} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="max-w-2xl mx-auto px-4 pt-4">
+        <div className="flex gap-2 mb-4">
+          {['services', 'products'].map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className="px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+              style={activeTab === tab
+                ? { background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', color: '#fff', boxShadow: '0 4px 12px rgba(59,130,246,0.35)' }
+                : { background: '#0f2040', color: '#94a3b8', border: '1px solid #1e3a5f' }
+              }>
+              {tab === 'services' ? '🏢 Services (' + shops.length + ')' : '📦 Products (' + products.length + ')'}
+            </button>
+          ))}
         </div>
 
-        {/* Shops Tab */}
-        {activeTab === 'shops' && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {shops.length > 0 ? shops.map((shop) => (
-              <div key={shop._id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">{shop.shopName}</h3>
-                    <p className="text-sm text-gray-500 capitalize">{shop.category}</p>
-                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">{shop.description}</p>
-                    
-                    {/* Status Badges */}
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        shop.moderation?.status === 'approved' ? 'bg-green-100 text-green-700' :
-                        shop.moderation?.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {shop.moderation?.status === 'approved' ? '✅ Live' : 
-                         shop.moderation?.status === 'pending' ? '⏳ Under Review' : '❌ Rejected'}
-                      </span>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        shop.payment?.status === 'completed' ? 'bg-green-100 text-green-700' :
-                        'bg-orange-100 text-orange-700'
-                      }`}>
-                        {shop.payment?.status === 'completed' ? '✅ Paid' : '💳 Payment Pending'}
-                      </span>
+        {loading && !showForm ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#3b82f6' }} />
+          </div>
+        ) : (
+          <>
+            {/* Services Tab */}
+            {activeTab === 'services' && (
+              <div className="space-y-3">
+                {shops.length > 0 ? shops.map(shop => (
+                  <div key={shop._id} className="rounded-2xl p-4" style={{ background: '#0f2040', border: '1px solid #1e3a5f', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <h3 className="font-semibold text-sm" style={{ color: '#e2e8f0' }}>{shop.shopName}</h3>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                            style={{ background: shop.moderation?.status === 'approved' ? 'rgba(46,212,122,0.15)' : 'rgba(245,158,11,0.15)', color: shop.moderation?.status === 'approved' ? '#2ED47A' : '#fbbf24' }}>
+                            {shop.moderation?.status === 'approved' ? '✓ Live' : 'Under Review'}
+                          </span>
+                          {shop.payment?.status === 'completed' || shop.isFree ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(46,212,122,0.15)', color: '#2ED47A' }}>
+                              {shop.isFree ? 'FREE' : 'Paid'}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: 'rgba(245,158,11,0.15)', color: '#fbbf24' }}>
+                              Payment Pending
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs mb-1" style={{ color: '#60a5fa' }}>{shop.category}</p>
+                        <p className="text-xs line-clamp-2" style={{ color: '#94a3b8' }}>{shop.description}</p>
+                        <p className="text-xs mt-1" style={{ color: '#64748b' }}>
+                          📍 {shop.location?.city}, {shop.location?.state}
+                        </p>
+                      </div>
+                      <button onClick={() => handleDeleteShop(shop._id)} className="p-2 rounded-lg flex-shrink-0" style={{ color: '#f87171', background: 'rgba(239,68,68,0.1)' }}>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-
-                    {/* Payment Button */}
-                    {shop.payment?.status !== 'completed' && (
-                      <button
-                        onClick={() => handlePayment('shop', shop)}
-                        disabled={processingPayment === shop._id}
-                        className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {processingPayment === shop._id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <CreditCard className="w-4 h-4" />
-                        )}
-                        Pay ₹100 Listing Fee
+                    {!shop.isFree && shop.payment?.status !== 'completed' && (
+                      <button onClick={() => initiatePayment('service', shop)} disabled={processingPayment === shop._id}
+                        className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
+                        style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', boxShadow: '0 4px 12px rgba(59,130,246,0.35)' }}>
+                        {processingPayment === shop._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                        Pay Rs.{LISTING_FEE} to Activate
                       </button>
                     )}
                   </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => handleDeleteShop(shop._id)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                    >
-                      <Trash2 size={18} />
+                )) : (
+                  <div className="rounded-2xl p-10 text-center" style={{ background: '#0f2040', border: '1px solid #1e3a5f' }}>
+                    <Store className="w-12 h-12 mx-auto mb-3" style={{ color: '#1e3a5f' }} />
+                    <p className="font-semibold mb-1" style={{ color: '#e2e8f0' }}>No services listed yet</p>
+                    <p className="text-sm mb-4" style={{ color: '#94a3b8' }}>Your first 2 listings are FREE!</p>
+                    <button onClick={() => { setShowForm(true); setFormType('service'); }}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
+                      style={{ background: 'linear-gradient(135deg, #1d4ed8, #3b82f6)' }}>
+                      <Plus className="w-4 h-4" /> Add Service
                     </button>
                   </div>
-                </div>
-              </div>
-            )) : (
-              <div className="col-span-full text-center py-12 bg-white rounded-xl border border-gray-200">
-                <Store size={48} className="mx-auto text-gray-400 mb-4" />
-                <p className="text-gray-500">No shops listed yet</p>
-                <button
-                  onClick={() => { setShowForm(true); setFormType('shop'); }}
-                  className="mt-4 text-blue-600 hover:underline font-medium"
-                >
-                  Create your first shop
-                </button>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Products Tab */}
-        {activeTab === 'products' && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {products.length > 0 ? products.map((product) => (
-              <div key={product._id} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">{product.title}</h3>
-                    <p className="text-sm text-gray-500 capitalize">{product.category}</p>
-                    <p className="text-lg font-bold text-blue-600 mt-1">₹{product.price}</p>
-                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">{product.description}</p>
-                    
-                    {/* Status Badges */}
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        product.moderation?.status === 'approved' ? 'bg-green-100 text-green-700' :
-                        product.moderation?.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {product.moderation?.status === 'approved' ? '✅ Live' : 
-                         product.moderation?.status === 'pending' ? '⏳ Under Review' : '❌ Rejected'}
-                      </span>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        product.payment?.status === 'completed' ? 'bg-green-100 text-green-700' :
-                        'bg-orange-100 text-orange-700'
-                      }`}>
-                        {product.payment?.status === 'completed' ? '✅ Commission Paid' : `💳 Pay ₹${Math.round(product.price * COMMISSION_RATE)}`}
-                      </span>
+            {/* Products Tab */}
+            {activeTab === 'products' && (
+              <div className="space-y-3">
+                {products.length > 0 ? products.map(product => (
+                  <div key={product._id} className="rounded-2xl p-4" style={{ background: '#ffffff', border: '1px solid #e8f0f8', boxShadow: '0 2px 8px rgba(30,79,122,0.06)' }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <h3 className="font-semibold text-sm" style={{ color: '#0f1f35' }}>{product.title}</h3>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                            style={{ background: product.moderation?.status === 'approved' ? '#dcfce7' : '#fef9c3', color: product.moderation?.status === 'approved' ? '#166534' : '#713f12' }}>
+                            {product.moderation?.status === 'approved' ? 'Live' : 'Under Review'}
+                          </span>
+                          {product.payment?.status === 'completed' || product.isFree ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: '#dcfce7', color: '#166534' }}>
+                              {product.isFree ? 'Free' : 'Paid'}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: '#fef3c7', color: '#92400e' }}>
+                              Payment Pending
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs mb-1" style={{ color: '#1E4F7A' }}>{product.category} · Rs.{product.price}</p>
+                        <p className="text-xs line-clamp-2" style={{ color: '#5a7a9a' }}>{product.description}</p>
+                      </div>
+                      <button onClick={() => handleDeleteProduct(product._id)} className="p-2 rounded-lg flex-shrink-0" style={{ color: '#ef4444', background: '#fef2f2' }}>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-
-                    {/* Payment Button */}
-                    {product.payment?.status !== 'completed' && (
-                      <button
-                        onClick={() => handlePayment('product', product)}
-                        disabled={processingPayment === product._id}
-                        className="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:opacity-50"
-                      >
-                        {processingPayment === product._id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <CreditCard className="w-4 h-4" />
-                        )}
-                        Pay Commission (₹{Math.round(product.price * COMMISSION_RATE)})
+                    {!product.isFree && product.payment?.status !== 'completed' && (
+                      <button onClick={() => initiatePayment('product', product)} disabled={processingPayment === product._id}
+                        className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
+                        style={{ background: 'linear-gradient(135deg, #1E4F7A, #2a6fa8)' }}>
+                        {processingPayment === product._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                        Pay Rs.{LISTING_FEE} to Activate
                       </button>
                     )}
                   </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => handleDeleteProduct(product._id)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                    >
-                      <Trash2 size={18} />
+                )) : (
+                  <div className="rounded-2xl p-10 text-center" style={{ background: '#ffffff', border: '1px solid #e8f0f8' }}>
+                    <ShoppingBag className="w-12 h-12 mx-auto mb-3" style={{ color: '#d0dce8' }} />
+                    <p className="font-semibold mb-1" style={{ color: '#0f1f35' }}>No products listed yet</p>
+                    <p className="text-sm mb-4" style={{ color: '#5a7a9a' }}>Your first 2 listings are FREE!</p>
+                    <button onClick={() => { setShowForm(true); setFormType('product'); }}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
+                      style={{ background: 'linear-gradient(135deg, #1E4F7A, #2a6fa8)' }}>
+                      <Plus className="w-4 h-4" /> Add Product
                     </button>
                   </div>
-                </div>
-              </div>
-            )) : (
-              <div className="col-span-full text-center py-12 bg-white rounded-xl border border-gray-200">
-                <ShoppingBag size={48} className="mx-auto text-gray-400 mb-4" />
-                <p className="text-gray-500">No products listed yet</p>
-                <button
-                  onClick={() => { setShowForm(true); setFormType('product'); }}
-                  className="mt-4 text-blue-600 hover:underline font-medium"
-                >
-                  Create your first product
-                </button>
+                )}
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </main>

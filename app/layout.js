@@ -2,14 +2,15 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
 import { AuthProvider } from '@/context/AuthContext';
 import BottomNavigation from '@/components/BottomNavigation';
+import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 import './globals.css';
 
 const geist = Geist({ subsets: ['latin'] });
 const geistMono = Geist_Mono({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Zubika - Multi-Vendor Marketplace',
-  description: 'Zubika is a modern multi-vendor e-commerce marketplace. Shop from verified vendors, sell your products, and experience secure payments with Razorpay.',
+  title: 'Zubika – India\'s Smart Service Marketplace',
+  description: 'Zubika connects you with verified service providers across 14 categories — Event Planning, Hospitality, Healthcare, Fitness, Food & more. List your service free!',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -35,6 +36,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body className={`${geist.className} antialiased`}>
         <AuthProvider>
+          <ServiceWorkerRegister />
           <div className="pb-20 md:pb-0">
             {children}
           </div>
